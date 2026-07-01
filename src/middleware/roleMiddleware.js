@@ -1,8 +1,14 @@
 
 function roleMiddleware(...rolesPermitidos) {
   return (req, res, next) => {
+
+    console.log('🧪 ROLE DEBUG:', {
+      usuario: req.usuario,
+      rolUsuario: req.usuario?.rol,
+      rolesPermitidos
+    });
+
     if (!req.usuario) {
-      // Esto solo pasaría si roleMiddleware se usa sin authMiddleware antes.
       return res.status(401).json({
         ok: false,
         mensaje: 'No autenticado.',
@@ -10,6 +16,7 @@ function roleMiddleware(...rolesPermitidos) {
     }
 
     if (!rolesPermitidos.includes(req.usuario.rol)) {
+      console.log('🔴 BLOQUEADO POR ROL');
       return res.status(403).json({
         ok: false,
         mensaje: 'No tienes permiso para acceder a este recurso.',
@@ -19,5 +26,4 @@ function roleMiddleware(...rolesPermitidos) {
     next();
   };
 }
-
 module.exports = roleMiddleware;
