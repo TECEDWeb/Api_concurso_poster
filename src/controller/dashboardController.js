@@ -1,28 +1,36 @@
 const dashboardService = require('../services/dashboardService');
 
-exports.adminDashboard = async (req, res) => {
-  try {
+const dashboardController = {
 
-    console.log('🟣 DASHBOARD ADMIN INICIADO');
+  /**
+   * GET /api/dashboard/admin
+   */
+  async adminDashboard(req, res) {
+    try {
+      console.log('🟣 DASHBOARD ADMIN INICIADO');
 
-    const data = await dashboardService.getAdminStats();
+      const data = await dashboardService.getAdminStats();
 
-    console.log('🟢 DATA DASHBOARD:', data);
+      console.log('🟢 DATA DASHBOARD:', data);
 
-    res.json({
-      success: true,
-      data
-    });
+      return res.json({
+        ok: true,
+        data
+      });
 
-  } catch (error) {
+    } catch (error) {
 
-    console.log('🔴 ERROR REAL DASHBOARD:');
-    console.log(error); // 👈 ESTE ES EL IMPORTANTE
+      console.log('🔴 ERROR REAL DASHBOARD:');
+      console.error(error);
 
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-      stack: error.stack
-    });
+      return res.status(500).json({
+        ok: false,
+        mensaje: 'Error al cargar dashboard',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
   }
+
 };
+
+module.exports = dashboardController;

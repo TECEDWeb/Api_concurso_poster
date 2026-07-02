@@ -2,56 +2,63 @@ const RubricaService = require('../services/rubricaService');
 
 class RubricaController {
 
-    static async listar(req, res) {
-        try {
+  // =========================
+  // LISTAR RÚBRICAS
+  // =========================
+  static async listar(req, res) {
+    try {
 
-            const rubricas = await RubricaService.listar();
+      const rubricas = await RubricaService.listar();
 
-            res.json(rubricas);
+      return res.json({
+        ok: true,
+        data: rubricas || []
+      });
 
-        } catch (error) {
+    } catch (error) {
 
-            console.error(error);
+      console.error('ERROR listar rubricas:', error);
 
-            res.status(500).json({
-                success: false,
-                message: error.message
-            });
-
-        }
+      return res.status(500).json({
+        ok: false,
+        mensaje: 'Error al listar rúbricas'
+      });
     }
+  }
 
-    static async obtener(req, res) {
 
-        try {
+  // =========================
+  // OBTENER POR CONCURSO
+  // =========================
+  static async obtener(req, res) {
+    try {
 
-            const concursoId = parseInt(req.params.concursoId);
+      const concursoId = parseInt(req.params.concursoId);
 
-            const rubrica = await RubricaService.obtener(concursoId);
+      const rubrica = await RubricaService.obtener(concursoId);
 
-            if (!rubrica) {
+      if (!rubrica) {
+        return res.status(404).json({
+          ok: false,
+          mensaje: 'Rúbrica no encontrada'
+        });
+      }
 
-                return res.status(404).json({
-                    success: false,
-                    message: 'Rúbrica no encontrada'
-                });
+      return res.json({
+        ok: true,
+        data: rubrica
+      });
 
-            }
+    } catch (error) {
 
-            res.json(rubrica);
+      console.error('ERROR obtener rubrica:', error);
 
-        } catch (error) {
-
-            console.error(error);
-
-            res.status(500).json({
-                success: false,
-                message: error.message
-            });
-
-        }
-
+      return res.status(500).json({
+        ok: false,
+        mensaje: 'Error al obtener rúbrica'
+      });
     }
+  }
 
 }
 

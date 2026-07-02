@@ -2,15 +2,10 @@ const usuarioModel = require('../model/usuarioModel');
 const authService = require('../services/authService');
 
 const authController = {
-  /**
-   * POST /api/auth/login
-   * Body esperado: { cedula: string, password: string }
-   *
-   * El login es por cédula (no por email), porque la cédula
-   * es el identificador único tanto de administradores como
-   * de evaluadores en este sistema.
-   */
 
+  /**
+   * POST /api/auth/registrar
+   */
   async registrar(req, res) {
     try {
       const { cedula, nombre, email, password, rol, departamento } = req.body;
@@ -23,6 +18,7 @@ const authController = {
       }
 
       const existe = await usuarioModel.buscarPorCedula(cedula);
+
       if (existe) {
         return res.status(400).json({
           ok: false,
@@ -32,7 +28,7 @@ const authController = {
 
       const password_hash = await authService.hashPassword(password);
 
-      const nuevoUsuario = await usuarioModel.crear({
+      const nuevoUsuarioId = await usuarioModel.crear({
         cedula,
         nombre,
         email,
@@ -43,17 +39,31 @@ const authController = {
 
       return res.json({
         ok: true,
-        usuario: nuevoUsuario
+        mensaje: 'Usuario creado correctamente',
+        data: {
+          id: nuevoUsuarioId,
+          cedula,
+          nombre,
+          email,
+          rol,
+          departamento
+        }
       });
 
     } catch (error) {
-      console.error(error);
+      console.error('Error registrar:', error);
+
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al crear usuario'
       });
     }
   },
+
+
+  /**
+   * POST /api/auth/login
+   */
   async login(req, res) {
     try {
       const { cedula, password } = req.body;
@@ -61,25 +71,23 @@ const authController = {
       if (!cedula || !password) {
         return res.status(400).json({
           ok: false,
-          mensaje: 'Cédula y contraseña son obligatorias.',
+          mensaje: 'Cédula y contraseña son obligatorias'
         });
       }
 
       const usuario = await usuarioModel.buscarPorCedula(cedula);
 
       if (!usuario) {
-        // Mensaje genérico: no revelamos si fue la cédula o la contraseña
-        // lo que falló, para no facilitar enumeración de usuarios.
         return res.status(401).json({
           ok: false,
-          mensaje: 'Cédula o contraseña incorrectos.',
+          mensaje: 'Cédula o contraseña incorrectos'
         });
       }
 
       if (!usuario.activo) {
         return res.status(403).json({
           ok: false,
-          mensaje: 'Este usuario está inactivo. Contacta al administrador.',
+          mensaje: 'Usuario inactivo'
         });
       }
 
@@ -91,57 +99,67 @@ const authController = {
       if (!passwordValida) {
         return res.status(401).json({
           ok: false,
-          mensaje: 'Cédula o contraseña incorrectos.',
+          mensaje: 'Cédula o contraseña incorrectos'
         });
       }
 
       const token = authService.generarToken(usuario);
 
-      // Nunca devolvemos password_hash en la respuesta.
       return res.json({
         ok: true,
-        token,
-        usuario: {
-          id: usuario.id,
-          cedula: usuario.cedula,
-          nombre: usuario.nombre,
-          email: usuario.email,
-          rol: usuario.rol,
-          departamento: usuario.departamento,
-        },
+        data: {
+          token,
+          usuario: {
+            id: usuario.id,
+            cedula: usuario.cedula,
+            nombre: usuario.nombre,
+            email: usuario.email,
+            rol: usuario.rol,
+            departamento: usuario.departamento
+          }
+        }
       });
+
     } catch (error) {
-      console.error('Error en authController.login:', error);
+      console.error('Error login:', error);
+
       return res.status(500).json({
         ok: false,
-        mensaje: 'Error interno del servidor al iniciar sesión.',
+        mensaje: 'Error interno del servidor'
       });
     }
   },
 
+
   /**
    * GET /api/auth/perfil
-   * Requiere authMiddleware. Devuelve los datos del usuario autenticado
-   * a partir del token, útil para que el frontend valide la sesión
-   * al recargar la app sin tener que volver a pedir credenciales.
    */
   async perfil(req, res) {
     try {
       const usuario = await usuarioModel.buscarPorId(req.usuario.id);
 
       if (!usuario) {
-        return res.status(404).json({ ok: false, mensaje: 'Usuario no encontrado.' });
+        return res.status(404).json({
+          ok: false,
+          mensaje: 'Usuario no encontrado'
+        });
       }
 
-      return res.json({ ok: true, usuario });
+      return res.json({
+        ok: true,
+        data: usuario
+      });
+
     } catch (error) {
-      console.error('Error en authController.perfil:', error);
+      console.error('Error perfil:', error);
+
       return res.status(500).json({
         ok: false,
-        mensaje: 'Error interno del servidor al obtener el perfil.',
+        mensaje: 'Error al obtener perfil'
       });
     }
-  },
+  }
+
 };
 
 module.exports = authController;

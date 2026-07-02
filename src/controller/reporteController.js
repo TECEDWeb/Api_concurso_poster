@@ -5,23 +5,26 @@ const db = require('../config/db');
 // =========================
 exports.stats = async (req, res) => {
   try {
-    const [proyectos] = await db.query(
-      'SELECT COUNT(*) as total FROM proyectos'
+    const [[proyectos]] = await db.query(
+      'SELECT COUNT(*) AS total FROM proyectos'
     );
 
-    const [evaluaciones] = await db.query(
-      'SELECT COUNT(*) as total FROM evaluaciones'
+    const [[evaluaciones]] = await db.query(
+      'SELECT COUNT(*) AS total FROM evaluaciones'
     );
 
-    res.json({
+    return res.json({
       ok: true,
-      proyectos: proyectos[0].total,
-      evaluaciones: evaluaciones[0].total
+      data: {
+        proyectos: proyectos.total,
+        evaluaciones: evaluaciones.total
+      }
     });
 
   } catch (error) {
-    console.error('Error en stats:', error);
-    res.status(500).json({
+    console.error('ERROR stats:', error);
+
+    return res.status(500).json({
       ok: false,
       mensaje: 'Error al obtener estadísticas'
     });
@@ -29,25 +32,36 @@ exports.stats = async (req, res) => {
 };
 
 // =========================
-// RANKING DE PROYECTOS
+// RANKING CORREGIDO
 // =========================
 exports.ranking = async (req, res) => {
   try {
 
     const [rows] = await db.query(`
       SELECT
-        titulo_proyecto,
-        ROUND(AVG(porcentaje), 2) AS promedio,
-        COUNT(*) AS total_evaluaciones,
-        MAX(calificacion_cualitativa) AS calificacion
-      FROM vista_resumen_evaluaciones
-      GROUP BY titulo_proyecto
-      ORDER BY promedio DESC
+        e.titulo_proyecto,
+        ROUND(SUM(n.puntaje), 2) AS puntaje_total,
+        COUNT(d.id) AS total_items,
+        ROUND(
+          (SUM(n.puntaje) * 100.0) / 60,
+          2
+        ) AS porcentaje,
+        CASE
+          WHEN SUM(n.puntaje) >= 53 THEN 'Sobresaliente'
+          WHEN SUM(n.puntaje) >= 46 THEN 'Bueno'
+          WHEN SUM(n.puntaje) >= 36 THEN 'Regular'
+          ELSE 'Insuficiente'
+        END AS calificacion
+      FROM evaluaciones e
+      JOIN detalles_evaluacion d ON e.id = d.evaluacion_id
+      JOIN niveles n ON d.nivel_id = n.id
+      GROUP BY e.id, e.titulo_proyecto
+      ORDER BY porcentaje DESC
     `);
 
-    res.json({
+    return res.json({
       ok: true,
-      data: rows
+      data: rows || []
     });
 
   } catch (error) {
@@ -57,9 +71,9 @@ exports.ranking = async (req, res) => {
     console.error(error);
     console.error('==========================');
 
-    res.status(500).json({
+    return res.status(500).json({
       ok: false,
-      mensaje: error.message
+      mensaje: 'Error al generar ranking'
     });
   }
 };

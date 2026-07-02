@@ -1,66 +1,61 @@
 const db = require('../config/db');
 
+/**
+ * LISTAR SOLO EVALUADORES
+ */
 exports.getEvaluadores = async (req, res) => {
   try {
-    console.log('==============================');
-    console.log('GET EVALUADORES REQUEST');
-    console.log('URL:', req.originalUrl);
-    console.log('METHOD:', req.method);
+    console.log('GET EVALUADORES');
 
     const [rows] = await db.query(
-      'SELECT * FROM usuarios WHERE rol="evaluador"'
+      'SELECT id, cedula, nombre, email, telefono, rol, departamento, activo, created_at FROM usuarios WHERE rol = ?',
+      ['evaluador']
     );
 
-    console.log('Evaluadores encontrados:', rows.length);
-    console.log('Data:', rows);
-    console.log('==============================');
-
-    res.json(rows);
+    return res.json({
+      ok: true,
+      data: rows
+    });
 
   } catch (err) {
-    console.log('==============================');
-    console.error('ERROR GET EVALUADORES');
-    console.error('Mensaje:', err.message);
-    console.error('Stack:', err.stack);
-    console.log('==============================');
+    console.error('ERROR getEvaluadores:', err.message);
 
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({
+      ok: false,
+      mensaje: 'Error al obtener evaluadores'
+    });
   }
 };
 
 
+/**
+ * CREAR USUARIO
+ */
 exports.create = async (req, res) => {
   try {
-    console.log('==============================');
-    console.log('CREATE USUARIO REQUEST');
-    console.log('Body recibido:', req.body);
-    console.log('URL:', req.originalUrl);
-    console.log('METHOD:', req.method);
+    console.log('CREATE USUARIO:', req.body);
 
-    const { nombre, email, password, rol } = req.body;
+    const { cedula, nombre, email, telefono, password_hash, rol, departamento } = req.body;
 
-    if (!nombre || !email || !password || !rol) {
-      console.log('FALTAN CAMPOS');
-      console.log({ nombre, email, password, rol });
-
+    if (!cedula || !nombre || !password_hash || !rol) {
       return res.status(400).json({
-        message: 'Faltan datos obligatorios'
+        ok: false,
+        mensaje: 'Faltan campos obligatorios'
       });
     }
 
-    const result = await db.query(
-      'INSERT INTO usuarios (nombre, email, password, rol) VALUES (?, ?, ?, ?)',
-      [nombre, email, password, rol]
+    const [result] = await db.query(
+      `INSERT INTO usuarios (cedula, nombre, email, telefono, password_hash, rol, departamento)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [cedula, nombre, email || null, telefono || null, password_hash, rol, departamento || null]
     );
 
-    console.log('==============================');
-    console.log('USUARIO CREADO');
-    console.log('Resultado DB:', result);
-    console.log('==============================');
-
-    res.json({
-      message: 'Usuario creado',
+    return res.json({
+      ok: true,
+      mensaje: 'Usuario creado correctamente',
       data: {
+        id: result.insertId,
+        cedula,
         nombre,
         email,
         rol
@@ -68,42 +63,103 @@ exports.create = async (req, res) => {
     });
 
   } catch (err) {
-    console.log('==============================');
-    console.error('ERROR CREATE USUARIO');
-    console.error('Mensaje:', err.message);
-    console.error('Stack:', err.stack);
-    console.log('==============================');
+    console.error('ERROR create usuario:', err.message);
 
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({
+      ok: false,
+      mensaje: 'Error al crear usuario'
+    });
   }
 };
 
 
+/**
+ * CAMBIAR ESTADO (activo/inactivo)
+ */
 exports.toggleActivo = async (req, res) => {
   try {
-    console.log('==============================');
-    console.log('TOGGLE ACTIVO USUARIO');
-    console.log('ID:', req.params.id);
-
     const { id } = req.params;
 
-    const result = await db.query(
-      'UPDATE usuarios SET activo = NOT activo WHERE id=?',
+    await db.query(
+      'UPDATE usuarios SET activo = NOT activo WHERE id = ?',
       [id]
     );
 
-    console.log('Estado actualizado');
-    console.log('Resultado:', result);
-    console.log('==============================');
-
-    res.json({ message: 'Estado actualizado' });
+    return res.json({
+      ok: true,
+      mensaje: 'Estado actualizado'
+    });
 
   } catch (err) {
-    console.log('==============================');
-    console.error('ERROR TOGGLE USUARIO');
-    console.error(err.message);
-    console.log('==============================');
+    console.error('ERROR toggleActivo:', err.message);
 
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({
+      ok: false,
+      mensaje: 'Error al actualizar estado'
+    });
   }
-};  
+};
+
+
+/**
+ * LISTAR TODOS LOS USUARIOS (ADMIN)
+ */
+exports.listar = async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT id, cedula, nombre, email, telefono, rol, departamento, activo, created_at
+       FROM usuarios
+       ORDER BY nombre ASC`
+    );
+
+    return res.json({
+      ok: true,
+      data: rows
+    });
+
+  } catch (err) {
+    console.error('ERROR listar usuarios:', err.message);
+
+    return res.status(500).json({
+      ok: false,
+      mensaje: 'Error al listar usuarios'
+    });
+  }
+};
+
+
+/**
+ * BUSCAR POR ID
+ */
+exports.getById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [rows] = await db.query(
+      `SELECT id, cedula, nombre, email, telefono, rol, departamento, activo
+       FROM usuarios
+       WHERE id = ?`,
+      [id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({
+        ok: false,
+        mensaje: 'Usuario no encontrado'
+      });
+    }
+
+    return res.json({
+      ok: true,
+      data: rows[0]
+    });
+
+  } catch (err) {
+    console.error('ERROR getById:', err.message);
+
+    return res.status(500).json({
+      ok: false,
+      mensaje: 'Error al obtener usuario'
+    });
+  }
+};
