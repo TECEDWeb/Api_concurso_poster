@@ -2,6 +2,7 @@ function roleMiddleware(...rolesPermitidos) {
   return (req, res, next) => {
 
     console.log('🔵 roleMiddleware');
+    console.log('Usuario:', req.usuario);
     console.log('Rol del usuario:', req.usuario?.rol);
     console.log('Roles permitidos:', rolesPermitidos);
 

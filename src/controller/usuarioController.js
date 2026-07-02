@@ -3,7 +3,7 @@ const db = require('../config/db');
 exports.getEvaluadores = async (req, res) => {
   try {
     console.log('==============================');
-    console.log('📥 GET EVALUADORES REQUEST');
+    console.log('GET EVALUADORES REQUEST');
     console.log('URL:', req.originalUrl);
     console.log('METHOD:', req.method);
 
@@ -11,7 +11,7 @@ exports.getEvaluadores = async (req, res) => {
       'SELECT * FROM usuarios WHERE rol="evaluador"'
     );
 
-    console.log('✅ Evaluadores encontrados:', rows.length);
+    console.log('Evaluadores encontrados:', rows.length);
     console.log('Data:', rows);
     console.log('==============================');
 
@@ -19,7 +19,7 @@ exports.getEvaluadores = async (req, res) => {
 
   } catch (err) {
     console.log('==============================');
-    console.error('❌ ERROR GET EVALUADORES');
+    console.error('ERROR GET EVALUADORES');
     console.error('Mensaje:', err.message);
     console.error('Stack:', err.stack);
     console.log('==============================');
@@ -32,16 +32,15 @@ exports.getEvaluadores = async (req, res) => {
 exports.create = async (req, res) => {
   try {
     console.log('==============================');
-    console.log('📥 CREATE USUARIO REQUEST');
+    console.log('CREATE USUARIO REQUEST');
     console.log('Body recibido:', req.body);
     console.log('URL:', req.originalUrl);
     console.log('METHOD:', req.method);
 
     const { nombre, email, password, rol } = req.body;
 
-    // 🔍 VALIDACIÓN DEBUG
     if (!nombre || !email || !password || !rol) {
-      console.log('❌ FALTAN CAMPOS');
+      console.log('FALTAN CAMPOS');
       console.log({ nombre, email, password, rol });
 
       return res.status(400).json({
@@ -55,7 +54,7 @@ exports.create = async (req, res) => {
     );
 
     console.log('==============================');
-    console.log('✅ USUARIO CREADO');
+    console.log('USUARIO CREADO');
     console.log('Resultado DB:', result);
     console.log('==============================');
 
@@ -70,7 +69,7 @@ exports.create = async (req, res) => {
 
   } catch (err) {
     console.log('==============================');
-    console.error('❌ ERROR CREATE USUARIO');
+    console.error('ERROR CREATE USUARIO');
     console.error('Mensaje:', err.message);
     console.error('Stack:', err.stack);
     console.log('==============================');
@@ -83,7 +82,7 @@ exports.create = async (req, res) => {
 exports.toggleActivo = async (req, res) => {
   try {
     console.log('==============================');
-    console.log('📥 TOGGLE ACTIVO USUARIO');
+    console.log('TOGGLE ACTIVO USUARIO');
     console.log('ID:', req.params.id);
 
     const { id } = req.params;
@@ -93,7 +92,7 @@ exports.toggleActivo = async (req, res) => {
       [id]
     );
 
-    console.log('✅ Estado actualizado');
+    console.log('Estado actualizado');
     console.log('Resultado:', result);
     console.log('==============================');
 
@@ -101,7 +100,7 @@ exports.toggleActivo = async (req, res) => {
 
   } catch (err) {
     console.log('==============================');
-    console.error('❌ ERROR TOGGLE USUARIO');
+    console.error('ERROR TOGGLE USUARIO');
     console.error(err.message);
     console.log('==============================');
 
