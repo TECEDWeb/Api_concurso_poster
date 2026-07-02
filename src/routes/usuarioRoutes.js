@@ -11,29 +11,28 @@ router.get(
     authMiddleware,
     roleMiddleware('admin'),
     async (req, res) => {
-      console.log('🟢 ENTRÓ A /api/usuarios');
-      console.log('Usuario autenticado:', req.usuario);
       try {
         const { rol } = req.query;
-        console.log('Filtro rol:', rol);
+
         const usuarios = await usuarioModel.listar({ rol });
-        console.log('Usuarios encontrados:', usuarios.length);
-        res.json({
+
+        console.log('🟢 USUARIOS ENVIADOS:', usuarios);
+
+        return res.json({
           ok: true,
-          usuarios
+          usuarios: Array.isArray(usuarios) ? usuarios : []
         });
 
       } catch (error) {
-        console.log('🔴 ERROR EN LISTAR USUARIOS');
-        console.log(error);
-        res.status(500).json({
-          ok:false,
-          mensaje:'Error interno'
+        console.error('🔴 Error al listar usuarios:', error);
+
+        return res.status(500).json({
+          ok: false,
+          usuarios: []
         });
       }
     }
   );
-
 // Tanto administradores como evaluadores pueden ver esta ruta de ejemplo.
 router.get(
   '/ejemplo-multi-rol',
