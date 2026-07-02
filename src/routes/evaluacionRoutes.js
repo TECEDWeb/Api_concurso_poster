@@ -43,4 +43,9 @@ router.post(
   controller.create
 );
 
+router.get(
+  '/resumen',
+  verificarToken,
+  controller.getResumen
+);
 module.exports = router;

@@ -79,7 +79,19 @@ const EvaluacionService = {
     );
 
     return rows;
-  }
+  },
+
+  async getResumenEvaluador() {
+  const [rows] = await db.query(
+    `SELECT 
+        COUNT(*) AS total,
+        SUM(CASE WHEN estado = 'evaluado' THEN 1 ELSE 0 END) AS completados,
+        SUM(CASE WHEN estado = 'asignado' THEN 1 ELSE 0 END) AS pendientes
+     FROM evaluaciones`
+  );
+
+  return rows[0];
+}
 };
 
 module.exports = EvaluacionService;

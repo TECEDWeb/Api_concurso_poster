@@ -170,7 +170,29 @@ const evaluacionController = {
         mensaje: 'Error al guardar evaluación'
       });
     }
-  }
+  },
+
+  /**
+ * GET /api/evaluaciones/resumen
+ */
+  async getResumen(req, res) {
+    try {
+      const data = await EvaluacionService.getResumenEvaluador();
+
+      return res.json({
+        ok: true,
+        data
+      });
+
+    } catch (err) {
+      console.error('ERROR resumen evaluaciones:', err);
+
+      return res.status(500).json({
+        ok: false,
+        mensaje: 'Error al obtener resumen'
+      });
+    }
+  },
 
 };
 
