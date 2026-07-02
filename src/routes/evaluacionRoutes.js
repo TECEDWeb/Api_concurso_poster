@@ -14,7 +14,7 @@ console.log("CONTROLLER CARGADO:", controller);
 router.get(
   '/reporte-admin',
   verificarToken,
-  verificarRol('administrador'),
+  verificarRol('admin'),
   controller.getReporteAdmin
 );
 

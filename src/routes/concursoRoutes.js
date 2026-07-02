@@ -21,19 +21,19 @@ router.get(
 
 router.post(
   '/',
-  roleMiddleware(['administrador']),
+  roleMiddleware(['admin']),
   controller.crear
 );
 
 router.put(
   '/:id',
-  roleMiddleware(['administrador']),
+  roleMiddleware(['admin']),
   controller.actualizar
 );
 
 router.delete(
   '/:id',
-  roleMiddleware(['administrador']),
+  roleMiddleware(['admin']),
   controller.eliminar
 );
 

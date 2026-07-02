@@ -9,7 +9,7 @@ const usuarioModel = require('../model/usuarioModel');
 router.get(
   '/',
   authMiddleware,
-  roleMiddleware('administrador'),
+  roleMiddleware('admin'),
   async (req, res) => {
     try {
       const { rol } = req.query; // permite filtrar ?rol=evaluador
@@ -26,7 +26,7 @@ router.get(
 router.get(
   '/ejemplo-multi-rol',
   authMiddleware,
-  roleMiddleware('administrador', 'evaluador'),
+  roleMiddleware('admin', 'evaluador'),
   (req, res) => {
     res.json({ ok: true, mensaje: `Hola ${req.usuario.nombre}, tu rol es ${req.usuario.rol}` });
   }
