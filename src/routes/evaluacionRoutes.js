@@ -33,7 +33,7 @@ router.get(
 router.get(
   '/',
   verificarToken,
-  verificarRol('administrador'),
+  verificarRol('admin'),
   controller.getAll
 );
 
