@@ -1,11 +1,6 @@
 const pool = require('../config/db');
 
 const usuarioModel = {
-  /**
-   * Busca un usuario por cédula (usada como nombre de usuario para login).
-   * Devuelve también el password_hash porque authService lo necesita
-   * para comparar; el controller se encarga de no exponerlo en la respuesta.
-   */
   async buscarPorCedula(cedula) {
     const [rows] = await pool.query(
       `SELECT id, cedula, nombre, email, telefono, password_hash, rol,
