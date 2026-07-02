@@ -33,11 +33,15 @@ exports.stats = async (req, res) => {
 // =========================
 exports.ranking = async (req, res) => {
   try {
+
     const [rows] = await db.query(`
-      SELECT p.nombre, AVG(e.nota) as promedio
-      FROM evaluaciones e
-      JOIN proyectos p ON e.proyecto_id = p.id
-      GROUP BY p.id
+      SELECT
+        titulo_proyecto,
+        ROUND(AVG(porcentaje), 2) AS promedio,
+        COUNT(*) AS total_evaluaciones,
+        MAX(calificacion_cualitativa) AS calificacion
+      FROM vista_resumen_evaluaciones
+      GROUP BY titulo_proyecto
       ORDER BY promedio DESC
     `);
 
@@ -47,10 +51,15 @@ exports.ranking = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error en ranking:', error);
+
+    console.error('==========================');
+    console.error('ERROR RANKING');
+    console.error(error);
+    console.error('==========================');
+
     res.status(500).json({
       ok: false,
-      mensaje: 'Error al obtener ranking'
+      mensaje: error.message
     });
   }
 };
