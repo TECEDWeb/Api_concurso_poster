@@ -1,182 +1,175 @@
 const EvaluacionService = require('../services/evaluacionService');
-const db = require('../config/db');
 
 const evaluacionController = {
 
   /**
    * GET /api/evaluaciones
+   * (Administrador)
    */
   async getAll(req, res) {
     try {
-      const rows = await EvaluacionService.getTodosResultados();
+
+      const data = await EvaluacionService.getTodosResultados();
 
       return res.json({
         ok: true,
-        data: rows || []
+        data
       });
 
     } catch (err) {
-      console.error('ERROR getAll evaluaciones:', err);
+
+      console.error("ERROR getAll:", err);
 
       return res.status(500).json({
         ok: false,
-        mensaje: 'Error al obtener evaluaciones'
+        mensaje: "Error al obtener evaluaciones"
       });
+
     }
   },
 
-
   /**
-   * GET /api/evaluaciones/admin
+   * GET /api/evaluaciones/reporte-admin
    */
   async getReporteAdmin(req, res) {
     try {
-      const rows = await EvaluacionService.getTodosResultados();
+
+      const data = await EvaluacionService.getTodosResultados();
 
       return res.json({
         ok: true,
-        data: rows || []
+        data
       });
 
     } catch (err) {
-      console.error('ERROR reporte admin:', err);
+
+      console.error("ERROR reporte:", err);
 
       return res.status(500).json({
         ok: false,
-        mensaje: 'Error al obtener reporte'
+        mensaje: "Error al generar reporte"
       });
+
     }
   },
-
 
   /**
    * GET /api/evaluaciones/asignados
    */
   async getAsignados(req, res) {
     try {
-      const id = req.usuario?.id;
 
-      console.log("USER TOKEN:", req.usuario);
+      const evaluadorId = req.usuario.id;
 
-      if (!id) {
-        return res.status(401).json({
-          ok: false,
-          mensaje: 'No autenticado'
-        });
-      }
-
-      const rows = await EvaluacionService.getAsignados(id);
+      const data = await EvaluacionService.getAsignados(evaluadorId);
 
       return res.json({
         ok: true,
-        data: rows || []
+        data
       });
 
     } catch (err) {
-      console.error("ERROR ASIGNADOS:", err);
+
+      console.error("ERROR asignados:", err);
 
       return res.status(500).json({
         ok: false,
-        mensaje: 'Error al obtener evaluaciones asignadas'
+        mensaje: "Error al obtener proyectos asignados"
       });
+
     }
   },
 
+  /**
+   * GET /api/evaluaciones/:id/formulario
+   */
+  async getFormulario(req, res) {
+    try {
+
+      const evaluacionId = req.params.id;
+
+      const data = await EvaluacionService.getFormulario(evaluacionId);
+
+      return res.json({
+        ok: true,
+        data
+      });
+
+    } catch (err) {
+
+      console.error("ERROR formulario:", err);
+
+      return res.status(500).json({
+        ok: false,
+        mensaje: "Error al obtener formulario"
+      });
+
+    }
+  },
+
+  /**
+   * POST /api/evaluaciones/:id/guardar
+   */
+  async guardar(req, res) {
+    try {
+
+      const evaluacionId = req.params.id;
+
+      await EvaluacionService.guardarEvaluacion(
+        evaluacionId,
+        req.body
+      );
+
+      return res.json({
+        ok: true,
+        mensaje: "Evaluación guardada correctamente"
+      });
+
+    } catch (err) {
+
+      console.error("ERROR guardar:", err);
+
+      return res.status(500).json({
+        ok: false,
+        mensaje: "Error al guardar evaluación"
+      });
+
+    }
+  },
 
   /**
    * GET /api/evaluaciones/mis-resultados
    */
   async getMisResultados(req, res) {
     try {
-      const id = req.usuario?.id;
 
-      if (!id) {
-        return res.status(401).json({
-          ok: false,
-          mensaje: 'No autenticado'
-        });
-      }
+      const evaluadorId = req.usuario.id;
 
-      const rows = await EvaluacionService.getMisResultados(id);
+      const data = await EvaluacionService.getMisResultados(evaluadorId);
 
       return res.json({
         ok: true,
-        data: rows || []
+        data
       });
 
     } catch (err) {
-      console.error('ERROR mis resultados:', err);
+
+      console.error("ERROR resultados:", err);
 
       return res.status(500).json({
         ok: false,
-        mensaje: 'Error al obtener resultados'
+        mensaje: "Error al obtener resultados"
       });
+
     }
   },
 
-
   /**
-   * POST /api/evaluaciones
+   * GET /api/evaluaciones/resumen
    */
-  async create(req, res) {
-    try {
-      const { proyectoId, nota, observacion } = req.body;
-      const evaluadorId = req.usuario?.id;
-
-      if (!evaluadorId) {
-        return res.status(401).json({
-          ok: false,
-          mensaje: 'No autenticado'
-        });
-      }
-
-      if (!proyectoId || nota == null) {
-        return res.status(400).json({
-          ok: false,
-          mensaje: 'Datos incompletos'
-        });
-      }
-
-      const [asignada] = await db.query(
-        `SELECT id 
-         FROM evaluaciones 
-         WHERE evaluador_id = ? AND proyecto_id = ?`,
-        [evaluadorId, proyectoId]
-      );
-
-      if (!asignada || asignada.length === 0) {
-        return res.status(404).json({
-          ok: false,
-          mensaje: 'Evaluación no asignada'
-        });
-      }
-
-      await EvaluacionService.guardarEvaluacion(
-        asignada[0].id,
-        nota,
-        observacion
-      );
-
-      return res.json({
-        ok: true,
-        mensaje: 'Evaluación guardada correctamente'
-      });
-
-    } catch (err) {
-      console.error('ERROR create evaluación:', err);
-
-      return res.status(500).json({
-        ok: false,
-        mensaje: 'Error al guardar evaluación'
-      });
-    }
-  },
-
-  /**
- * GET /api/evaluaciones/resumen
- */
   async getResumen(req, res) {
     try {
+
       const data = await EvaluacionService.getResumenEvaluador();
 
       return res.json({
@@ -185,14 +178,16 @@ const evaluacionController = {
       });
 
     } catch (err) {
-      console.error('ERROR resumen evaluaciones:', err);
+
+      console.error("ERROR resumen:", err);
 
       return res.status(500).json({
         ok: false,
-        mensaje: 'Error al obtener resumen'
+        mensaje: "Error al obtener resumen"
       });
+
     }
-  },
+  }
 
 };
 
