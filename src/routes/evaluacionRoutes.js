@@ -1,22 +1,30 @@
 const express = require('express');
 const router = express.Router();
 
-// ⚠️ OJO: revisa que la carpeta sea "controllers" o "controller"
 const controller = require('../controller/evaluacionController');
 
 const verificarToken = require('../middleware/authMiddleware');
 const verificarRol = require('../middleware/roleMiddleware');
 
-// DEBUG (muy importante para encontrar el error)
-console.log("CONTROLLER CARGADO:", controller);
+// ========================
+// FORMULARIO
+// ========================
 
-// ADMIN REPORT
 router.get(
-  '/reporte-admin',
+  '/:id/formulario',
   verificarToken,
-  verificarRol('admin'),
-  controller.getReporteAdmin
+  controller.getFormulario
 );
+
+router.post(
+  '/:id/guardar',
+  verificarToken,
+  controller.guardar
+);
+
+// ========================
+// OTRAS RUTAS
+// ========================
 
 router.get(
   '/asignados',
@@ -31,21 +39,23 @@ router.get(
 );
 
 router.get(
+  '/resumen',
+  verificarToken,
+  controller.getResumen
+);
+
+router.get(
   '/',
   verificarToken,
   verificarRol('admin'),
   controller.getAll
 );
 
-router.post(
-  '/',
+router.get(
+  '/reporte-admin',
   verificarToken,
-  controller.create
+  verificarRol('admin'),
+  controller.getReporteAdmin
 );
 
-router.get(
-  '/resumen',
-  verificarToken,
-  controller.getResumen
-);
 module.exports = router;
