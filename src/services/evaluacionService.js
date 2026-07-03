@@ -168,7 +168,19 @@ const EvaluacionService = {
     `);
 
     return rows; // 👈 NO rows[0]
-  }
+  },
+
+  async getFormulario(evaluacionId) {
+  const [rows] = await db.query(
+    `SELECT p.concurso_id
+     FROM evaluaciones e
+     JOIN proyectos p ON e.proyecto_id = p.id
+     WHERE e.id = ?`,
+    [evaluacionId]
+  );
+
+  return this.getFormularioByConcurso(rows[0].concurso_id);
+}
 };
 
 module.exports = EvaluacionService;

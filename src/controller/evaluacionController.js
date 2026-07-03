@@ -1,14 +1,13 @@
 const EvaluacionService = require('../services/evaluacionService');
+const db = require('../config/db');
 
 const evaluacionController = {
 
   /**
    * GET /api/evaluaciones
-   * (Administrador)
    */
   async getAll(req, res) {
     try {
-
       const data = await EvaluacionService.getTodosResultados();
 
       return res.json({
@@ -17,14 +16,12 @@ const evaluacionController = {
       });
 
     } catch (err) {
-
       console.error("ERROR getAll:", err);
 
       return res.status(500).json({
         ok: false,
         mensaje: "Error al obtener evaluaciones"
       });
-
     }
   },
 
@@ -33,7 +30,6 @@ const evaluacionController = {
    */
   async getReporteAdmin(req, res) {
     try {
-
       const data = await EvaluacionService.getTodosResultados();
 
       return res.json({
@@ -42,14 +38,12 @@ const evaluacionController = {
       });
 
     } catch (err) {
-
       console.error("ERROR reporte:", err);
 
       return res.status(500).json({
         ok: false,
         mensaje: "Error al generar reporte"
       });
-
     }
   },
 
@@ -58,7 +52,6 @@ const evaluacionController = {
    */
   async getAsignados(req, res) {
     try {
-
       const evaluadorId = req.usuario.id;
 
       const data = await EvaluacionService.getAsignados(evaluadorId);
@@ -69,14 +62,12 @@ const evaluacionController = {
       });
 
     } catch (err) {
-
       console.error("ERROR asignados:", err);
 
       return res.status(500).json({
         ok: false,
         mensaje: "Error al obtener proyectos asignados"
       });
-
     }
   },
 
@@ -85,7 +76,6 @@ const evaluacionController = {
    */
   async getFormulario(req, res) {
     try {
-
       const evaluacionId = req.params.id;
 
       const data = await EvaluacionService.getFormulario(evaluacionId);
@@ -96,14 +86,12 @@ const evaluacionController = {
       });
 
     } catch (err) {
-
       console.error("ERROR formulario:", err);
 
       return res.status(500).json({
         ok: false,
         mensaje: "Error al obtener formulario"
       });
-
     }
   },
 
@@ -112,13 +100,13 @@ const evaluacionController = {
    */
   async guardar(req, res) {
     try {
-
       const evaluacionId = req.params.id;
 
-      await EvaluacionService.guardarEvaluacion(
+      await EvaluacionService.guardarEvaluacion({
         evaluacionId,
-        req.body
-      );
+        observacion: req.body.observacion,
+        detalles: req.body.detalles
+      });
 
       return res.json({
         ok: true,
@@ -126,14 +114,12 @@ const evaluacionController = {
       });
 
     } catch (err) {
-
       console.error("ERROR guardar:", err);
 
       return res.status(500).json({
         ok: false,
         mensaje: "Error al guardar evaluación"
       });
-
     }
   },
 
@@ -142,7 +128,6 @@ const evaluacionController = {
    */
   async getMisResultados(req, res) {
     try {
-
       const evaluadorId = req.usuario.id;
 
       const data = await EvaluacionService.getMisResultados(evaluadorId);
@@ -153,14 +138,12 @@ const evaluacionController = {
       });
 
     } catch (err) {
-
       console.error("ERROR resultados:", err);
 
       return res.status(500).json({
         ok: false,
         mensaje: "Error al obtener resultados"
       });
-
     }
   },
 
@@ -169,7 +152,6 @@ const evaluacionController = {
    */
   async getResumen(req, res) {
     try {
-
       const data = await EvaluacionService.getResumenEvaluador();
 
       return res.json({
@@ -178,14 +160,12 @@ const evaluacionController = {
       });
 
     } catch (err) {
-
       console.error("ERROR resumen:", err);
 
       return res.status(500).json({
         ok: false,
         mensaje: "Error al obtener resumen"
       });
-
     }
   }
 
