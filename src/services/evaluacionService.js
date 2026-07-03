@@ -159,15 +159,15 @@ const EvaluacionService = {
    * RESUMEN GENERAL
    */
   async getResumenEvaluador() {
-    const [rows] = await db.query(
-      `SELECT 
+    const [rows] = await db.query(`
+      SELECT 
         COUNT(*) AS total,
         SUM(CASE WHEN estado = 'evaluado' THEN 1 ELSE 0 END) AS completados,
         SUM(CASE WHEN estado = 'asignado' THEN 1 ELSE 0 END) AS pendientes
-       FROM evaluaciones`
-    );
+      FROM evaluaciones
+    `);
 
-    return rows[0];
+    return rows; // 👈 NO rows[0]
   }
 };
 
