@@ -1,61 +1,26 @@
 const express = require('express');
 const router = express.Router();
 
-const controller = require('../controller/evaluacionController');
+const evaluacionController = require('../controller/evaluacionController');
+const authMiddleware = require('../middleware/authMiddleware');
 
-const verificarToken = require('../middleware/authMiddleware');
-const verificarRol = require('../middleware/roleMiddleware');
+// =========================
+// ADMIN / GENERAL
+// =========================
+router.get('/', authMiddleware, evaluacionController.getAll);
+router.get('/reporte-admin', authMiddleware, evaluacionController.getReporteAdmin);
 
-// ========================
-// FORMULARIO
-// ========================
+// =========================
+// EVALUADOR
+// =========================
+router.get('/asignados', authMiddleware, evaluacionController.getAsignados);
+router.get('/mis-resultados', authMiddleware, evaluacionController.getMisResultados);
+router.get('/resumen', authMiddleware, evaluacionController.getResumen);
 
-router.get(
-  '/:id/formulario',
-  verificarToken,
-  controller.getFormulario
-);
-
-router.post(
-  '/:id/guardar',
-  verificarToken,
-  controller.guardar
-);
-
-// ========================
-// OTRAS RUTAS
-// ========================
-
-router.get(
-  '/asignados',
-  verificarToken,
-  controller.getAsignados
-);
-
-router.get(
-  '/mis-resultados',
-  verificarToken,
-  controller.getMisResultados
-);
-
-router.get(
-  '/resumen',
-  verificarToken,
-  controller.getResumen
-);
-
-router.get(
-  '/',
-  verificarToken,
-  verificarRol('admin'),
-  controller.getAll
-);
-
-router.get(
-  '/reporte-admin',
-  verificarToken,
-  verificarRol('admin'),
-  controller.getReporteAdmin
-);
+// =========================
+// FORMULARIO (IMPORTANTE)
+// =========================
+router.get('/:id/formulario', authMiddleware, evaluacionController.getFormulario);
+router.post('/:id/guardar', authMiddleware, evaluacionController.guardar);
 
 module.exports = router;
