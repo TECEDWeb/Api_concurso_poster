@@ -173,28 +173,70 @@ const EvaluacionService = {
   },
 
   async getFormulario(evaluacionId) {
-    const [rows] = await db.query(
-      `SELECT
-          e.id,
-          p.id AS proyecto_id,
-          p.concurso_id
-      FROM evaluaciones e
-      JOIN proyectos p ON e.proyecto_id = p.id
-      WHERE e.id = ?`,
-      [evaluacionId]
-    );
+    try {
 
-    console.log("Evaluación encontrada:", rows);
+      const [rows] = await db.query(
+        `SELECT 
+            e.id,
+            p.id AS proyecto_id,
+            p.concurso_id
+        FROM evaluaciones e
+        JOIN proyectos p ON e.proyecto_id = p.id
+        WHERE e.id = ?`,
+        [evaluacionId]
+      );
 
-    if (!rows.length) {
-      throw new Error(`No existe la evaluación ${evaluacionId}`);
+      console.log("Evaluación encontrada:", rows);
+
+      // 🔴 SI NO EXISTE → RESPUESTA CONTROLADA
+      if (!rows || rows.length === 0) {
+        return {
+          ok: false,
+          mensaje: `No existe la evaluación ${evaluacionId}`,
+          data: null
+        };
+      }
+
+      const evaluacion = rows[0];
+
+      // 🔴 VALIDACIÓN EXTRA SEGURA
+      if (!evaluacion.concurso_id) {
+        return {
+          ok: false,
+          mensaje: 'La evaluación no tiene concurso asociado',
+          data: null
+        };
+      }
+      if (evaluacion.estado === 'evaluado') {
+        return {
+          ok: false,
+          mensaje: 'Esta evaluación ya fue completada'
+        };
+      }
+
+      // 🔵 FLUJO NORMAL (NO CAMBIA NADA)
+      const formulario = await this.getFormularioByConcurso(evaluacion.concurso_id);
+
+      return {
+        ok: true,
+        data: {
+          evaluacion_id: evaluacion.id,
+          proyecto_id: evaluacion.proyecto_id,
+          ...formulario
+        }
+      };
+
+    } catch (error) {
+
+      console.error('ERROR getFormulario:', error);
+
+      return {
+        ok: false,
+        mensaje: 'Error interno al generar formulario',
+        data: null
+      };
     }
-
-    console.log("Concurso:", rows[0].concurso_id);
-
-    return this.getFormularioByConcurso(rows[0].concurso_id);
   },
-  
   async asignarMasivo(proyectoId, evaluadores) {
     const values = evaluadores.map(e => [
       e,
