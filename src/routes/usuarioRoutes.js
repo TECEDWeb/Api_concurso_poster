@@ -5,59 +5,105 @@ const authMiddleware = require('../middleware/authMiddleware');
 const roleMiddleware = require('../middleware/roleMiddleware');
 const usuarioModel = require('../model/usuarioModel');
 
-// Solo administradores pueden listar todos los usuarios del sistema.
+console.log('======================================');
+console.log('✅ usuarioRoutes.js CARGADO');
+console.log('======================================');
+
+// ==============================
+// PRUEBA
+// ==============================
+router.get('/ping', (req, res) => {
+
+  console.log('🏓 PING usuarios');
+
+  res.json({
+    ok: true,
+    mensaje: 'usuarioRoutes funcionando correctamente'
+  });
+
+});
+
+// ==============================
+// LISTAR USUARIOS
+// ==============================
 router.get(
-    '/',
-    authMiddleware,
-    roleMiddleware('admin'),
-    async (req, res) => {
-      try {
-        const { rol } = req.query;
+  '/',
+  authMiddleware,
+  roleMiddleware('admin'),
+  async (req, res) => {
 
-        const usuarios = await usuarioModel.listar({ rol });
+    console.log('📥 GET /api/usuarios');
 
-        console.log('🟢 USUARIOS ENVIADOS:', usuarios);
+    try {
 
-        return res.json({
-          ok: true,
-          usuarios: Array.isArray(usuarios) ? usuarios : []
-        });
+      const { rol } = req.query;
 
-      } catch (error) {
-        console.error('🔴 Error al listar usuarios:', error);
+      console.log('Rol solicitado:', rol);
 
-        return res.status(500).json({
-          ok: false,
-          usuarios: []
-        });
-      }
+      const usuarios = await usuarioModel.listar({ rol });
+
+      console.log('Usuarios encontrados:', usuarios.length);
+
+      return res.json({
+        ok: true,
+        usuarios: Array.isArray(usuarios) ? usuarios : []
+      });
+
+    } catch (error) {
+
+      console.error('❌ Error listando usuarios');
+      console.error(error);
+
+      return res.status(500).json({
+        ok: false,
+        usuarios: []
+      });
+
     }
-  );
-// Tanto administradores como evaluadores pueden ver esta ruta de ejemplo.
+
+  }
+);
+
+// ==============================
+// EJEMPLO MULTIROL
+// ==============================
 router.get(
   '/ejemplo-multi-rol',
   authMiddleware,
   roleMiddleware('admin', 'evaluador'),
   (req, res) => {
-    res.json({ ok: true, mensaje: `Hola ${req.usuario.nombre}, tu rol es ${req.usuario.rol}` });
-  },
 
-  
+    console.log('📥 GET /api/usuarios/ejemplo-multi-rol');
+
+    res.json({
+      ok: true,
+      mensaje: `Hola ${req.usuario.nombre}, tu rol es ${req.usuario.rol}`
+    });
+
+  }
 );
- 
+
 // ==============================
-// SOLO EVALUADORES
+// LISTAR EVALUADORES
 // ==============================
 router.get(
   '/evaluadores',
   authMiddleware,
   roleMiddleware('admin'),
   async (req, res) => {
+
+    console.log('======================================');
+    console.log('📥 GET /api/usuarios/evaluadores');
+    console.log('Usuario autenticado:', req.usuario);
+    console.log('======================================');
+
     try {
 
       const evaluadores = await usuarioModel.listar({
         rol: 'evaluador'
       });
+
+      console.log(`✅ Evaluadores encontrados: ${evaluadores.length}`);
 
       return res.json({
         ok: true,
@@ -66,6 +112,7 @@ router.get(
 
     } catch (error) {
 
+      console.error('❌ ERROR EN /usuarios/evaluadores');
       console.error(error);
 
       return res.status(500).json({
@@ -74,6 +121,8 @@ router.get(
       });
 
     }
+
   }
 );
+
 module.exports = router;
