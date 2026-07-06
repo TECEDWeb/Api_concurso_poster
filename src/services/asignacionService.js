@@ -54,112 +54,177 @@ const AsignacionService = {
   // ==========================
   async crear(proyectoId, evaluadorId) {
 
-        const connection = await db.getConnection();
+    const connection = await db.getConnection();
 
-        try {
+    try {
 
         await connection.beginTransaction();
 
 
         // =====================================
-        // VALIDAR DUPLICADO ASIGNACION
+        // VALIDAR DUPLICADO
         // =====================================
 
-        const [exist] = await connection.query(`
-            SELECT id 
-            FROM asignaciones
-            WHERE proyecto_id = ?
-            AND evaluador_id = ?
-        `, [
+        const [existente] = await connection.query(
+        `
+        SELECT id
+        FROM asignaciones
+        WHERE proyecto_id = ?
+        AND evaluador_id = ?
+        `,
+        [
             proyectoId,
             evaluadorId
-        ]);
+        ]
+        );
 
 
-        if (exist.length > 0) {
-            throw new Error(
+        if (existente.length > 0) {
+
+        throw new Error(
             'Este evaluador ya está asignado a este proyecto'
-            );
+        );
+
         }
 
 
+
         // =====================================
-        // CREAR ASIGNACION ADMIN
+        // CREAR ASIGNACION
         // =====================================
 
-        const [asignacion] = await connection.query(`
-            INSERT INTO asignaciones
-            (
+        const [asignacion] = await connection.query(
+        `
+        INSERT INTO asignaciones
+        (
             proyecto_id,
             evaluador_id,
             estado
-            )
-            VALUES (?, ?, 'asignado')
+        )
+        VALUES (?, ?, 'asignado')
         `,
         [
             proyectoId,
             evaluadorId
-        ]);
+        ]
+        );
 
 
 
         // =====================================
-        // CREAR EVALUACION REAL
+        // BUSCAR RUBRICA DEL PROYECTO
         // =====================================
 
-        const [evaluacion] = await connection.query(`
-            INSERT INTO evaluaciones
-            (
+        const [rubrica] = await connection.query(
+        `
+        SELECT 
+            r.id AS rubrica_id
+
+        FROM proyectos p
+
+        INNER JOIN rubricas r
+        ON r.concurso_id = p.concurso_id
+
+        WHERE p.id = ?
+
+        LIMIT 1
+        `,
+        [
+            proyectoId
+        ]
+        );
+
+
+        if (!rubrica.length) {
+
+        throw new Error(
+            'El proyecto no tiene una rúbrica configurada'
+        );
+
+        }
+
+
+
+        const rubricaId = rubrica[0].rubrica_id;
+
+
+
+        // =====================================
+        // CREAR EVALUACION
+        // =====================================
+
+        const [evaluacion] = await connection.query(
+        `
+        INSERT INTO evaluaciones
+        (
             proyecto_id,
             evaluador_id,
+            rubrica_id,
             estado
-            )
-            VALUES (?, ?, 'asignado')
+        )
+        VALUES (?, ?, ?, 'asignado')
         `,
         [
             proyectoId,
-            evaluadorId
-        ]);
+            evaluadorId,
+            rubricaId
+        ]
+        );
 
 
 
         await connection.commit();
 
 
+
         console.log(
-            '✅ Asignación creada:',
-            asignacion.insertId
+        '================================'
         );
 
         console.log(
-            '✅ Evaluación creada:',
-            evaluacion.insertId
+        '✅ ASIGNACION CREADA:',
+        asignacion.insertId
         );
+
+        console.log(
+        '✅ EVALUACION CREADA:',
+        evaluacion.insertId
+        );
+
+        console.log(
+        '================================'
+        );
+
 
 
         return {
-            asignacionId: asignacion.insertId,
-            evaluacionId: evaluacion.insertId
+        asignacionId: asignacion.insertId,
+        evaluacionId: evaluacion.insertId
         };
 
 
-        } catch(error){
+    } catch(error) {
+
 
         await connection.rollback();
 
+
         console.error(
-            'ERROR CREANDO ASIGNACION:',
-            error
+        '❌ ERROR CREANDO ASIGNACION:',
+        error
         );
+
 
         throw error;
 
 
-        } finally {
+    } finally {
+
 
         connection.release();
 
-        }
+
+    }
 
     },
   // ==========================
