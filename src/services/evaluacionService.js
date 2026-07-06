@@ -50,13 +50,92 @@ const EvaluacionService = {
    * ASIGNAR PROYECTO A EVALUADOR
    */
   async asignarProyecto(evaluadorId, proyectoId) {
-    const [result] = await db.query(
-      `INSERT INTO evaluaciones (evaluador_id, proyecto_id, estado)
-       VALUES (?, ?, 'asignado')`,
-      [evaluadorId, proyectoId]
-    );
 
-    return { id: result.insertId };
+    try {
+
+      console.log('🟡 Creando asignación');
+      console.log('Evaluador:', evaluadorId);
+      console.log('Proyecto:', proyectoId);
+
+
+      // 1. Obtener la rúbrica del concurso del proyecto
+      const [rubricas] = await db.query(
+        `
+        SELECT 
+          r.id AS rubrica_id
+        FROM rubricas r
+        INNER JOIN proyectos p
+          ON p.concurso_id = r.concurso_id
+        WHERE p.id = ?
+        LIMIT 1
+        `,
+        [proyectoId]
+      );
+
+
+      if (!rubricas.length) {
+
+        throw new Error(
+          'El proyecto no tiene una rúbrica configurada'
+        );
+
+      }
+
+
+      const rubricaId = rubricas[0].rubrica_id;
+
+
+      console.log('🟢 Rúbrica encontrada:', rubricaId);
+
+
+
+      // 2. Crear la evaluación
+      const [result] = await db.query(
+        `
+        INSERT INTO evaluaciones
+        (
+          proyecto_id,
+          evaluador_id,
+          rubrica_id,
+          estado,
+          fecha_asignacion
+        )
+        VALUES (?, ?, ?, 'asignado', NOW())
+        `,
+        [
+          proyectoId,
+          evaluadorId,
+          rubricaId
+        ]
+      );
+
+
+      console.log(
+        '🟢 Evaluación creada ID:',
+        result.insertId
+      );
+
+
+      return {
+        id: result.insertId,
+        proyecto_id: proyectoId,
+        evaluador_id: evaluadorId,
+        rubrica_id: rubricaId,
+        estado: 'asignado'
+      };
+
+
+    } catch (error) {
+
+      console.error(
+        '🔴 Error asignando proyecto:',
+        error
+      );
+
+      throw error;
+
+    }
+
   },
 
   /**
