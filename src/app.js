@@ -10,7 +10,7 @@ const certificadoRoutes = require('./routes/certificadoRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const concursoRoutes = require('./routes/concursoRoutes');
 const reportesRoutes = require('./routes/reporteRoutes');
-
+const asignacionRoutes = require('./routes/asignacionRoutes');
 const app = express();
 
 // =========================
@@ -40,7 +40,7 @@ app.use('/api/certificados', certificadoRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/concursos', concursoRoutes);
 app.use('/api/reportes', reportesRoutes);
-
+app.use('/api/asignaciones', asignacionRoutes);
 // =========================
 // HEALTH CHECK
 // =========================
