@@ -1,20 +1,20 @@
 const express = require('express');
 const router = express.Router();
+
 const auth = require('../middleware/authMiddleware');
 const role = require('../middleware/roleMiddleware');
 const controller = require('../controller/asignacionController');
 
-// listar asignaciones
+// Listar asignaciones
 router.get('/', auth, role('admin'), controller.listar);
 
-// combos
-router.get('/proyectos', auth, controller.proyectos);
-router.get('/evaluadores', auth, controller.evaluadores);
+// Proyectos para el combo
+router.get('/proyectos', auth, role('admin'), controller.proyectos);
 
-// crear asignación
+// Crear asignación
 router.post('/', auth, role('admin'), controller.crear);
 
-// eliminar asignación
+// Eliminar asignación
 router.delete('/:id', auth, role('admin'), controller.eliminar);
 
 module.exports = router;

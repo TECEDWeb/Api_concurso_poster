@@ -40,7 +40,40 @@ router.get(
   roleMiddleware('admin', 'evaluador'),
   (req, res) => {
     res.json({ ok: true, mensaje: `Hola ${req.usuario.nombre}, tu rol es ${req.usuario.rol}` });
+  },
+
+  
+);
+ 
+// ==============================
+// SOLO EVALUADORES
+// ==============================
+router.get(
+  '/evaluadores',
+  authMiddleware,
+  roleMiddleware('admin'),
+  async (req, res) => {
+    try {
+
+      const evaluadores = await usuarioModel.listar({
+        rol: 'evaluador'
+      });
+
+      return res.json({
+        ok: true,
+        data: evaluadores
+      });
+
+    } catch (error) {
+
+      console.error(error);
+
+      return res.status(500).json({
+        ok: false,
+        mensaje: 'Error obteniendo evaluadores'
+      });
+
+    }
   }
 );
-
 module.exports = router;
