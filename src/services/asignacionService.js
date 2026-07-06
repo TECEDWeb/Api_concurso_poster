@@ -54,24 +54,114 @@ const AsignacionService = {
   // ==========================
   async crear(proyectoId, evaluadorId) {
 
-    // validar duplicado
-    const [exist] = await db.query(`
-      SELECT id FROM asignaciones
-      WHERE proyecto_id = ? AND evaluador_id = ?
-    `, [proyectoId, evaluadorId]);
+        const connection = await db.getConnection();
 
-    if (exist.length > 0) {
-      throw new Error('Este evaluador ya está asignado a este proyecto');
-    }
+        try {
 
-    const [result] = await db.query(`
-      INSERT INTO asignaciones (proyecto_id, evaluador_id, estado)
-      VALUES (?, ?, 'asignado')
-    `, [proyectoId, evaluadorId]);
+        await connection.beginTransaction();
 
-    return result.insertId;
-  },
 
+        // =====================================
+        // VALIDAR DUPLICADO ASIGNACION
+        // =====================================
+
+        const [exist] = await connection.query(`
+            SELECT id 
+            FROM asignaciones
+            WHERE proyecto_id = ?
+            AND evaluador_id = ?
+        `, [
+            proyectoId,
+            evaluadorId
+        ]);
+
+
+        if (exist.length > 0) {
+            throw new Error(
+            'Este evaluador ya está asignado a este proyecto'
+            );
+        }
+
+
+        // =====================================
+        // CREAR ASIGNACION ADMIN
+        // =====================================
+
+        const [asignacion] = await connection.query(`
+            INSERT INTO asignaciones
+            (
+            proyecto_id,
+            evaluador_id,
+            estado
+            )
+            VALUES (?, ?, 'asignado')
+        `,
+        [
+            proyectoId,
+            evaluadorId
+        ]);
+
+
+
+        // =====================================
+        // CREAR EVALUACION REAL
+        // =====================================
+
+        const [evaluacion] = await connection.query(`
+            INSERT INTO evaluaciones
+            (
+            proyecto_id,
+            evaluador_id,
+            estado
+            )
+            VALUES (?, ?, 'asignado')
+        `,
+        [
+            proyectoId,
+            evaluadorId
+        ]);
+
+
+
+        await connection.commit();
+
+
+        console.log(
+            '✅ Asignación creada:',
+            asignacion.insertId
+        );
+
+        console.log(
+            '✅ Evaluación creada:',
+            evaluacion.insertId
+        );
+
+
+        return {
+            asignacionId: asignacion.insertId,
+            evaluacionId: evaluacion.insertId
+        };
+
+
+        } catch(error){
+
+        await connection.rollback();
+
+        console.error(
+            'ERROR CREANDO ASIGNACION:',
+            error
+        );
+
+        throw error;
+
+
+        } finally {
+
+        connection.release();
+
+        }
+
+    },
   // ==========================
   // ELIMINAR ASIGNACIÓN
   // ==========================
