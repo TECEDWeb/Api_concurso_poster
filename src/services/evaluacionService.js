@@ -2,15 +2,15 @@ const db = require('../config/db');
 
 const EvaluacionService = {
 
-  /**
-   * OBTENER RÚBRICA COMPLETA (FORMULARIO)
-   */
+  
   async getFormularioByConcurso(concursoId) {
+    console.log("Buscando rúbrica para concurso:", concursoId);
     const [rubricaRows] = await db.query(
       `SELECT * FROM rubricas WHERE concurso_id = ? LIMIT 1`,
       [concursoId]
     );
 
+    console.log("Rúbrica encontrada:", rubricaRows);
     if (!rubricaRows.length) return null;
 
     const rubrica = rubricaRows[0];
@@ -20,17 +20,20 @@ const EvaluacionService = {
       [rubrica.id]
     );
 
+    console.log("Secciones encontradas:", secciones);
     for (let sec of secciones) {
       const [criterios] = await db.query(
         `SELECT * FROM criterios WHERE seccion_id = ? ORDER BY orden`,
         [sec.id]
       );
 
+      console.log("Criterios encontrados:", criterios);
       for (let c of criterios) {
         const [niveles] = await db.query(
           `SELECT * FROM niveles WHERE criterio_id = ?`,
           [c.id]
         );
+        console.log("Niveles encontrados:", niveles);
         c.niveles = niveles;
       }
 
@@ -164,23 +167,33 @@ const EvaluacionService = {
         COUNT(*) AS total,
         SUM(CASE WHEN estado = 'evaluado' THEN 1 ELSE 0 END) AS completados,
         SUM(CASE WHEN estado = 'asignado' THEN 1 ELSE 0 END) AS pendientes
-      FROM evaluaciones
-    `);
+      FROM evaluaciones`);
 
-    return rows; // 👈 NO rows[0]
+    return rows; 
   },
 
   async getFormulario(evaluacionId) {
-  const [rows] = await db.query(
-    `SELECT p.concurso_id
-     FROM evaluaciones e
-     JOIN proyectos p ON e.proyecto_id = p.id
-     WHERE e.id = ?`,
-    [evaluacionId]
-  );
+    const [rows] = await db.query(
+      `SELECT
+          e.id,
+          p.id AS proyecto_id,
+          p.concurso_id
+      FROM evaluaciones e
+      JOIN proyectos p ON e.proyecto_id = p.id
+      WHERE e.id = ?`,
+      [evaluacionId]
+    );
 
-  return this.getFormularioByConcurso(rows[0].concurso_id);
-}
+    console.log("Evaluación encontrada:", rows);
+
+    if (!rows.length) {
+      throw new Error(`No existe la evaluación ${evaluacionId}`);
+    }
+
+    console.log("Concurso:", rows[0].concurso_id);
+
+    return this.getFormularioByConcurso(rows[0].concurso_id);
+  }
 };
 
 module.exports = EvaluacionService;
