@@ -316,24 +316,83 @@ const EvaluacionService = {
       };
     }
   },
-  async asignarMasivo(proyectoId, evaluadores) {
-    const values = evaluadores.map(e => [
-      e,
-      proyectoId,
-      'asignado'
-    ]);
 
-    // evitar duplicados
-    for (const e of evaluadores) {
-      await db.query(
-        `INSERT IGNORE INTO evaluaciones (evaluador_id, proyecto_id, estado)
-        VALUES (?, ?, 'asignado')`,
-        [e, proyectoId]
+  async asignarMasivo(proyectoId, evaluadores) {
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+    // buscar rúbrica del proyecto
+    const [rubricas] = await connection.query(
+      `
+      SELECT r.id AS rubrica_id
+      FROM proyectos p
+      INNER JOIN rubricas r
+      ON r.concurso_id = p.concurso_id
+      WHERE p.id = ?
+      LIMIT 1
+      `,
+      [proyectoId]
+    );
+
+    if (!rubricas.length) {
+      throw new Error(
+        'El proyecto no tiene una rúbrica configurada'
       );
     }
 
+    const rubricaId = rubricas[0].rubrica_id;
+
+    for (const evaluadorId of evaluadores) {
+
+      const [existe] = await connection.query(
+        `
+        SELECT id
+        FROM evaluaciones
+        WHERE proyecto_id = ?
+        AND evaluador_id = ?
+        `,
+        [
+          proyectoId,
+          evaluadorId
+        ]
+      );
+
+      if (existe.length > 0) {
+        continue;
+      }
+
+      await connection.query(
+        `
+        INSERT INTO evaluaciones
+        (
+          proyecto_id,
+          evaluador_id,
+          rubrica_id,
+          estado,
+          fecha_asignacion
+        )
+        VALUES (?, ?, ?, 'asignado', NOW())
+        `,
+        [
+          proyectoId,
+          evaluadorId,
+          rubricaId
+        ]
+      );
+    }
+    await connection.commit();
     return true;
+  } catch(error) {
+    await connection.rollback();
+    console.error(
+      "ERROR asignarMasivo:",
+      error
+    );
+    throw error;
+  } finally {
+    connection.release();
   }
+}
 };
 
 module.exports = EvaluacionService;
