@@ -167,8 +167,46 @@ const evaluacionController = {
         mensaje: "Error al obtener resumen"
       });
     }
-  }
+  },
 
+ async asignar(req, res) {
+    try {
+
+      const { proyectoId, evaluadores } = req.body;
+
+      // Validación
+      if (
+        !proyectoId ||
+        !Array.isArray(evaluadores) ||
+        evaluadores.length === 0
+      ) {
+        return res.status(400).json({
+          ok: false,
+          mensaje: "Debe seleccionar un proyecto y al menos un evaluador."
+        });
+      }
+
+      await EvaluacionService.asignarMasivo(
+        proyectoId,
+        evaluadores
+      );
+
+      return res.json({
+        ok: true,
+        mensaje: "Proyecto asignado correctamente."
+      });
+
+    } catch (err) {
+
+      console.error("ERROR asignación:", err);
+
+      return res.status(500).json({
+        ok: false,
+        mensaje: "Error al asignar proyecto."
+      });
+
+    }
+  }
 };
 
 module.exports = evaluacionController;

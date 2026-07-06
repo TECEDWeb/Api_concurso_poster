@@ -193,6 +193,25 @@ const EvaluacionService = {
     console.log("Concurso:", rows[0].concurso_id);
 
     return this.getFormularioByConcurso(rows[0].concurso_id);
+  },
+  
+  async asignarMasivo(proyectoId, evaluadores) {
+    const values = evaluadores.map(e => [
+      e,
+      proyectoId,
+      'asignado'
+    ]);
+
+    // evitar duplicados
+    for (const e of evaluadores) {
+      await db.query(
+        `INSERT IGNORE INTO evaluaciones (evaluador_id, proyecto_id, estado)
+        VALUES (?, ?, 'asignado')`,
+        [e, proyectoId]
+      );
+    }
+
+    return true;
   }
 };
 
