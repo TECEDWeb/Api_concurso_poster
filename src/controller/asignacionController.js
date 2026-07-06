@@ -63,29 +63,38 @@ const controller = {
     try {
       console.log("====== CREAR ASIGNACION ======");
       console.log(req.body);
-      console.log("Usuario:",req.usuario);
-      const { proyectoId, evaluadorId } = req.body;
-
-      if (!proyectoId || !evaluadorId) {
+      console.log("Usuario:", req.usuario);
+      const {
+        proyectoId,
+        evaluadorId,
+        proyecto_id,
+        evaluador_id
+      } = req.body;
+      // soportar ambos formatos
+      const proyecto = proyectoId || proyecto_id;
+      const evaluador = evaluadorId || evaluador_id;
+      if (!proyecto || !evaluador) {
         return res.status(400).json({
-          ok: false,
-          mensaje: 'Datos incompletos'
+          ok:false,
+          mensaje:'Datos incompletos'
         });
       }
-
-      const id = await AsignacionService.crear(proyectoId, evaluadorId);
-
+      const data = await AsignacionService.crear(
+        proyecto,
+        evaluador
+      );
       return res.json({
-        ok: true,
-        id
+        ok:true,
+        data
       });
-
-    } catch (err) {
-      console.error(err);
-
+    } catch(err) {
+      console.error(
+        "ERROR CREANDO ASIGNACION:",
+        err
+      );
       return res.status(400).json({
-        ok: false,
-        mensaje: err.message
+        ok:false,
+        mensaje:err.message
       });
     }
   },
