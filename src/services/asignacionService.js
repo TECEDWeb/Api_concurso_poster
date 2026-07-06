@@ -53,7 +53,11 @@ const AsignacionService = {
   // CREAR ASIGNACIÓN
   // ==========================
   async crear(proyectoId, evaluadorId) {
-
+    console.log("CREANDO ASIGNACION");
+    console.log({
+    proyectoId,
+    evaluadorId
+    });
   const [rubrica] = await db.query(
     `
     SELECT r.id AS rubrica_id
@@ -95,8 +99,9 @@ const AsignacionService = {
   }
 
 
-
+    console.log("Insertando evaluación...");
   const [result] = await db.query(
+    
     `
     INSERT INTO evaluaciones
     (

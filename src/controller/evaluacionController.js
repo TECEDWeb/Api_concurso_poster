@@ -75,24 +75,49 @@ const evaluacionController = {
    * GET /api/evaluaciones/:id/formulario
    */
   async getFormulario(req, res) {
+
     try {
+
+      console.log("=================================");
+      console.log("📥 SOLICITUD FORMULARIO");
+      console.log("ID RECIBIDO:", req.params.id);
+      console.log("USUARIO:", req.usuario);
+      console.log("=================================");
+
+
       const evaluacionId = req.params.id;
 
-      const data = await EvaluacionService.getFormulario(evaluacionId);
+
+      const data = await EvaluacionService.getFormulario(
+        evaluacionId
+      );
+
+
+      console.log("📤 RESPUESTA FORMULARIO:");
+      console.log(JSON.stringify(data,null,2));
+
 
       return res.json({
-        ok: true,
+        ok:true,
         data
       });
 
-    } catch (err) {
-      console.error("ERROR formulario:", err);
+
+    } catch(err){
+
+      console.error(
+        "ERROR FORMULARIO:",
+        err
+      );
+
 
       return res.status(500).json({
-        ok: false,
-        mensaje: "Error al obtener formulario"
+        ok:false,
+        mensaje:"Error formulario"
       });
+
     }
+
   },
 
   /**

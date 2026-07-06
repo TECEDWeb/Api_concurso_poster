@@ -61,6 +61,9 @@ const controller = {
 
   async crear(req, res) {
     try {
+      console.log("====== CREAR ASIGNACION ======");
+      console.log(req.body);
+      console.log("Usuario:",req.usuario);
       const { proyectoId, evaluadorId } = req.body;
 
       if (!proyectoId || !evaluadorId) {
