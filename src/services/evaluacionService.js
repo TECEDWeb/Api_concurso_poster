@@ -4,46 +4,65 @@ const EvaluacionService = {
 
   
   async getFormularioByConcurso(concursoId) {
-    console.log("Buscando rúbrica para concurso:", concursoId);
-    const [rubricaRows] = await db.query(
-      `SELECT * FROM rubricas WHERE concurso_id = ? LIMIT 1`,
-      [concursoId]
-    );
-
-    console.log("Rúbrica encontrada:", rubricaRows);
-    if (!rubricaRows.length) return null;
-
-    const rubrica = rubricaRows[0];
-
-    const [secciones] = await db.query(
-      `SELECT * FROM secciones WHERE rubrica_id = ? ORDER BY orden`,
-      [rubrica.id]
-    );
-
-    console.log("Secciones encontradas:", secciones);
-    for (let sec of secciones) {
-      const [criterios] = await db.query(
-        `SELECT * FROM criterios WHERE seccion_id = ? ORDER BY orden`,
-        [sec.id]
+      console.log("Buscando rúbrica para concurso:", concursoId);
+      const [rubricaRows] = await db.query(
+          `
+          SELECT *
+          FROM rubricas
+          WHERE concurso_id = ?
+          LIMIT 1
+          `,
+          [concursoId]
+      );
+      if (!rubricaRows.length) {
+          return null;
+      }
+      const rubrica = rubricaRows[0];
+      const [secciones] = await db.query(
+          `
+          SELECT *
+          FROM secciones
+          WHERE concurso_id = ?
+          ORDER BY orden
+          `,
+          [concursoId]
       );
 
-      console.log("Criterios encontrados:", criterios);
-      for (let c of criterios) {
-        const [niveles] = await db.query(
-          `SELECT * FROM niveles WHERE criterio_id = ?`,
-          [c.id]
-        );
-        console.log("Niveles encontrados:", niveles);
-        c.niveles = niveles;
+      for (const sec of secciones) {
+
+          const [criterios] = await db.query(
+              `
+              SELECT *
+              FROM criterios
+              WHERE seccion_id = ?
+              ORDER BY orden
+              `,
+              [sec.id]
+          );
+
+          for (const criterio of criterios) {
+
+              const [niveles] = await db.query(
+                  `
+                  SELECT *
+                  FROM niveles
+                  WHERE criterio_id = ?
+                  ORDER BY puntaje DESC
+                  `,
+                  [criterio.id]
+              );
+
+              criterio.niveles = niveles;
+          }
+
+          sec.criterios = criterios;
       }
 
-      sec.criterios = criterios;
-    }
+      return {
+          rubrica,
+          secciones
+      };
 
-    return {
-      rubrica,
-      secciones
-    };
   },
 
   /**
