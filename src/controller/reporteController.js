@@ -1,5 +1,9 @@
 const db = require('../config/db');
 
+
+// =========================
+// STATS GENERALES
+// =========================
 exports.stats = async (req, res) => {
 
   try {
@@ -15,34 +19,26 @@ exports.stats = async (req, res) => {
 
 
     return res.json({
-
-      ok:true,
-
-      data:{
+      ok: true,
+      data: {
         proyectos: proyectos.total,
         evaluaciones: evaluaciones.total
       }
-
     });
 
 
-  } catch(error){
-
+  } catch (error) {
 
     console.error(
-      'ERROR stats:',
+      'ERROR STATS:',
       error
     );
 
 
     return res.status(500).json({
-
-      ok:false,
-
-      mensaje:'Error al obtener estadísticas'
-
+      ok: false,
+      mensaje: 'Error al obtener estadísticas'
     });
-
 
   }
 
@@ -52,119 +48,98 @@ exports.stats = async (req, res) => {
 
 
 // =========================
-// RANKING
+// RANKING GENERAL
 // =========================
-exports.ranking = async(req,res)=>{
+exports.ranking = async (req, res) => {
+
+  try {
 
 
-try{
+    const [rows] = await db.query(`
+
+      SELECT
+
+        p.nombre,
+
+        ROUND(
+          SUM(n.puntaje),
+          2
+        ) AS puntaje_total,
 
 
-const [rows] = await db.query(`
-
-SELECT
-
-p.nombre,
+        COUNT(d.id) AS total_items,
 
 
-ROUND(
-SUM(n.puntaje),
-2
-) AS puntaje_total,
+        ROUND(
+          (SUM(n.puntaje) * 100.0) / 60,
+          2
+        ) AS promedio,
 
 
-COUNT(d.id)
-AS total_items,
+        CASE
+
+          WHEN SUM(n.puntaje) >= 53
+            THEN 'Sobresaliente'
+
+          WHEN SUM(n.puntaje) >= 46
+            THEN 'Bueno'
+
+          WHEN SUM(n.puntaje) >= 36
+            THEN 'Regular'
+
+          ELSE 'Insuficiente'
+
+        END AS calificacion
 
 
-ROUND(
-(SUM(n.puntaje)*100.0)/60,
-2
-)
-AS promedio,
+      FROM evaluaciones e
 
 
-CASE
-
-WHEN SUM(n.puntaje)>=53
-THEN 'Sobresaliente'
+      INNER JOIN proyectos p
+        ON p.id = e.proyecto_id
 
 
-WHEN SUM(n.puntaje)>=46
-THEN 'Bueno'
+      INNER JOIN detalles_evaluacion d
+        ON d.evaluacion_id = e.id
 
 
-WHEN SUM(n.puntaje)>=36
-THEN 'Regular'
+      INNER JOIN niveles n
+        ON n.id = d.nivel_id
 
 
-ELSE 'Insuficiente'
+      GROUP BY
+        p.id,
+        p.nombre
 
 
-END AS calificacion
+      ORDER BY
+        promedio DESC
+
+    `);
 
 
-FROM evaluaciones e
+    return res.json({
+      ok: true,
+      data: rows
+    });
 
 
-INNER JOIN proyectos p
-ON p.id=e.proyecto_id
+  } catch(error){
+
+    console.error(
+      'ERROR RANKING:',
+      error
+    );
 
 
-INNER JOIN detalles_evaluacion d
-ON d.evaluacion_id=e.id
+    return res.status(500).json({
+      ok:false,
+      mensaje:'Error al generar ranking'
+    });
 
-
-INNER JOIN niveles n
-ON n.id=d.nivel_id
-
-
-GROUP BY
-p.id,p.nombre
-
-
-ORDER BY promedio DESC
-
-
-`);
-
-
-
-return res.json({
-
-ok:true,
-
-data:rows
-
-});
-
-
-
-}catch(error){
-
-
-console.error(
-'ERROR RANKING:',
-error
-);
-
-
-return res.status(500).json({
-
-ok:false,
-
-mensaje:'Error al generar ranking'
-
-});
-
-
-}
-
-
+  }
 
 };
-
-
 
 
 
@@ -172,183 +147,176 @@ mensaje:'Error al generar ranking'
 // =========================
 // REPORTES POR PROYECTO
 // =========================
-exports.proyectos = async(req,res)=>{
+exports.proyectos = async (req,res)=>{
 
 
-try{
+  try{
 
 
-const [rows] = await db.query(`
-
-
-SELECT
-
-
-p.id AS proyecto_id,
-
-
-p.nombre AS proyecto,
-
-
-COUNT(DISTINCT e.id)
-AS evaluaciones,
-
-
-ROUND(
-SUM(n.puntaje)/COUNT(DISTINCT e.id),
-2
-)
-AS promedio
-
-
-
-FROM proyectos p
-
-
-
-LEFT JOIN evaluaciones e
-
-ON e.proyecto_id=p.id
-
-
-
-LEFT JOIN detalles_evaluacion d
-
-ON d.evaluacion_id=e.id
-
-
-
-LEFT JOIN niveles n
-
-ON n.id=d.nivel_id
-
-
-
-GROUP BY
-
-p.id,
-p.nombre
-
-
-
-ORDER BY
-
-promedio DESC
-
-
-
-`);
-
-
-
-
-return res.json({
-
-ok:true,
-
-data:rows
-
-});
-
-
-
-}catch(error){
-
-
-console.error(
-'ERROR proyectos:',
-error
-);
-
-
-
-return res.status(500).json({
-
-ok:false,
-
-mensaje:
-'Error generando reportes por proyecto'
-
-});
-
-
-}
-
-exports.proyectos = async (req, res) => {
-  try {
     const [rows] = await db.query(`
+
       SELECT
+
         p.id,
+
         p.nombre AS proyecto,
-        COUNT(DISTINCT e.id) AS evaluaciones,
+
+
+        COUNT(DISTINCT e.id)
+          AS evaluaciones,
+
+
         ROUND(
           AVG(n.puntaje),
           2
-        ) AS promedio,
+        )
+        AS promedio,
+
+
         u.nombre AS evaluador,
+
+
         u.rol,
+
+
         ROUND(
           SUM(n.puntaje),
           2
-        ) AS puntaje
+        )
+        AS puntaje
+
+
+
       FROM proyectos p
+
+
       LEFT JOIN evaluaciones e
         ON e.proyecto_id = p.id
+
+
       LEFT JOIN detalles_evaluacion d
         ON d.evaluacion_id = e.id
+
+
       LEFT JOIN niveles n
         ON n.id = d.nivel_id
+
+
       LEFT JOIN usuarios u
         ON u.id = e.evaluador_id
+
+
+
       GROUP BY
+
         p.id,
         p.nombre,
         u.id,
         u.nombre,
         u.rol
+
+
+
       ORDER BY
-        p.nombre ASC,
-        promedio DESC
+
+        p.nombre ASC
+
     `);
 
+
+
     const proyectos = [];
-    rows.forEach(row => {
+
+
+    rows.forEach(row=>{
+
+
       let proyecto = proyectos.find(
         p => p.proyecto === row.proyecto
       );
-      if (!proyecto) {
+
+
+      if(!proyecto){
+
         proyecto = {
+
           proyecto: row.proyecto,
+
           evaluaciones: row.evaluaciones,
+
           promedio: row.promedio,
+
           evaluadores: []
+
         };
+
+
         proyectos.push(proyecto);
+
       }
+
+
 
       if(row.evaluador){
+
+
         proyecto.evaluadores.push({
+
           nombre: row.evaluador,
+
           rol: row.rol,
+
           puntaje: row.puntaje
+
         });
+
+
       }
-    });
-    return res.json({
-      ok:true,
-      data: proyectos
+
+
     });
 
-  } catch(error){
+
+
+    return res.json({
+
+      ok:true,
+
+      data: proyectos
+
+    });
+
+
+
+  }catch(error){
+
+
     console.error(
       'ERROR REPORTES PROYECTOS:',
       error
     );
-    return res.status(500).json({
-      ok:false,
-      mensaje:'Error al obtener reportes por proyecto'
-    });
-  }
-};
 
+
+    return res.status(500).json({
+
+      ok:false,
+
+      mensaje:'Error al obtener reportes por proyecto'
+
+    });
+
+
+  }
+
+  exports.exportar = async(req,res)=>{
+
+  return res.json({
+
+    ok:true,
+
+    mensaje:'Exportación pendiente'
+
+  });
+
+};
 };

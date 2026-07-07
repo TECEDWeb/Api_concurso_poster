@@ -22,6 +22,9 @@ router.get(
 controller.proyectos
 );
 
-
+router.get(
+  '/exportar',
+  controller.exportar
+);
 
 module.exports = router;
