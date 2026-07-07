@@ -5,7 +5,7 @@ const bcrypt = require('bcrypt');
 const usuarioController = {
 
   /**
-   * LISTAR TODOS LOS USUARIOS (ADMIN)
+   * LISTAR TODOS LOS USUARIOS
    */
   async listar(req, res) {
     try {
@@ -32,15 +32,11 @@ const usuarioController = {
   async getEvaluadores(req, res) {
     try {
       console.log('GET EVALUADORES');
-
-      const [rows] = await db.query(
-        'SELECT id, cedula, nombre, email, telefono, rol, departamento, activo, created_at FROM usuarios WHERE rol = ?',
-        ['evaluador']
-      );
+      const evaluadores = await usuarioModel.getEvaluadores();
 
       return res.json({
         ok: true,
-        data: rows
+        data: evaluadores
       });
 
     } catch (err) {
@@ -64,7 +60,16 @@ const usuarioController = {
       if (!cedula || !nombre || !password || !rol) {
         return res.status(400).json({
           ok: false,
-          mensaje: 'Faltan campos obligatorios'
+          mensaje: 'Faltan campos obligatorios: cedula, nombre, password, rol'
+        });
+      }
+
+      // Verificar si la cédula ya existe
+      const existe = await usuarioModel.buscarPorCedula(cedula);
+      if (existe) {
+        return res.status(400).json({
+          ok: false,
+          mensaje: 'Ya existe un usuario con esta cédula'
         });
       }
 
@@ -123,6 +128,17 @@ const usuarioController = {
         });
       }
 
+      // Si se cambia la cédula, verificar que no exista otra
+      if (cedula && cedula !== usuarioExistente.cedula) {
+        const existe = await usuarioModel.buscarPorCedula(cedula);
+        if (existe) {
+          return res.status(400).json({
+            ok: false,
+            mensaje: 'Ya existe un usuario con esta cédula'
+          });
+        }
+      }
+
       // Preparar datos para actualizar
       let password_hash = null;
       if (password && password.trim() !== '') {
@@ -131,13 +147,13 @@ const usuarioController = {
       }
 
       const actualizado = await usuarioModel.actualizar(id, {
-        cedula,
-        nombre,
-        email,
-        telefono,
-        rol,
-        departamento,
-        activo,
+        cedula: cedula || usuarioExistente.cedula,
+        nombre: nombre || usuarioExistente.nombre,
+        email: email !== undefined ? email : usuarioExistente.email,
+        telefono: telefono !== undefined ? telefono : usuarioExistente.telefono,
+        rol: rol || usuarioExistente.rol,
+        departamento: departamento !== undefined ? departamento : usuarioExistente.departamento,
+        activo: activo !== undefined ? activo : usuarioExistente.activo,
         password_hash
       });
 
@@ -167,24 +183,43 @@ const usuarioController = {
   },
 
   /**
-   * CAMBIAR ESTADO (activo/inactivo)
+   * CAMBIAR ESTADO (activo/inactivo) - Soporta PUT y PATCH
    */
   async toggleActivo(req, res) {
     try {
       const { id } = req.params;
+      console.log('🔄 Cambiando estado del usuario ID:', id);
 
-      const actualizado = await usuarioModel.toggleActivo(id);
-
-      if (!actualizado) {
+      // Verificar si el usuario existe
+      const usuarioExistente = await usuarioModel.buscarPorId(id);
+      if (!usuarioExistente) {
         return res.status(404).json({
           ok: false,
           mensaje: 'Usuario no encontrado'
         });
       }
 
+      // Cambiar estado
+      const actualizado = await usuarioModel.toggleActivo(id);
+
+      if (!actualizado) {
+        return res.status(400).json({
+          ok: false,
+          mensaje: 'No se pudo actualizar el estado'
+        });
+      }
+
+      // Obtener el usuario actualizado
+      const usuarioActualizado = await usuarioModel.buscarPorId(id);
+
       return res.json({
         ok: true,
-        mensaje: 'Estado actualizado'
+        mensaje: `Usuario ${usuarioActualizado.activo ? 'activado' : 'desactivado'} correctamente`,
+        data: {
+          id: usuarioActualizado.id,
+          nombre: usuarioActualizado.nombre,
+          activo: usuarioActualizado.activo
+        }
       });
 
     } catch (err) {
@@ -203,6 +238,15 @@ const usuarioController = {
     try {
       const { id } = req.params;
 
+      // Verificar si el usuario existe
+      const usuarioExistente = await usuarioModel.buscarPorId(id);
+      if (!usuarioExistente) {
+        return res.status(404).json({
+          ok: false,
+          mensaje: 'Usuario no encontrado'
+        });
+      }
+
       // Generar contraseña temporal
       const tempPassword = Math.random().toString(36).slice(-8);
       const saltRounds = 10;
@@ -211,9 +255,9 @@ const usuarioController = {
       const resetado = await usuarioModel.resetPassword(id, password_hash);
 
       if (!resetado) {
-        return res.status(404).json({
+        return res.status(400).json({
           ok: false,
-          mensaje: 'Usuario no encontrado'
+          mensaje: 'No se pudo resetear la contraseña'
         });
       }
 
@@ -241,12 +285,29 @@ const usuarioController = {
     try {
       const { id } = req.params;
 
-      const eliminado = await usuarioModel.eliminar(id);
-
-      if (!eliminado) {
+      // Verificar si el usuario existe
+      const usuarioExistente = await usuarioModel.buscarPorId(id);
+      if (!usuarioExistente) {
         return res.status(404).json({
           ok: false,
           mensaje: 'Usuario no encontrado'
+        });
+      }
+
+      // No permitir eliminar al propio usuario
+      if (id == req.usuario.id) {
+        return res.status(400).json({
+          ok: false,
+          mensaje: 'No puedes eliminar tu propio usuario'
+        });
+      }
+
+      const eliminado = await usuarioModel.eliminar(id);
+
+      if (!eliminado) {
+        return res.status(400).json({
+          ok: false,
+          mensaje: 'No se pudo eliminar el usuario'
         });
       }
 

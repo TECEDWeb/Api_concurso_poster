@@ -1,6 +1,9 @@
 const pool = require('../config/db');
 
 const usuarioModel = {
+  /**
+   * Buscar usuario por cédula
+   */
   async buscarPorCedula(cedula) {
     const [rows] = await pool.query(
       `SELECT id, cedula, nombre, email, telefono, password_hash, rol,
@@ -13,9 +16,12 @@ const usuarioModel = {
     return rows[0] || null;
   },
 
+  /**
+   * Buscar usuario por ID
+   */
   async buscarPorId(id) {
     const [rows] = await pool.query(
-      `SELECT id, cedula, nombre, email, telefono, rol, departamento, activo
+      `SELECT id, cedula, nombre, email, telefono, rol, departamento, activo, created_at
        FROM usuarios
        WHERE id = ?
        LIMIT 1`,
@@ -24,6 +30,9 @@ const usuarioModel = {
     return rows[0] || null;
   },
 
+  /**
+   * Crear nuevo usuario
+   */
   async crear({ cedula, nombre, email, telefono, password_hash, rol, departamento }) {
     const [result] = await pool.query(
       `INSERT INTO usuarios (cedula, nombre, email, telefono, password_hash, rol, departamento)
@@ -61,6 +70,9 @@ const usuarioModel = {
     return result.affectedRows > 0;
   },
 
+  /**
+   * Listar usuarios (con filtro opcional por rol)
+   */
   async listar({ rol } = {}) {
     if (rol) {
       const [rows] = await pool.query(
@@ -81,11 +93,16 @@ const usuarioModel = {
    * Cambiar estado de un usuario (activo/inactivo)
    */
   async toggleActivo(id) {
-    const [result] = await pool.query(
-      'UPDATE usuarios SET activo = NOT activo WHERE id = ?',
-      [id]
-    );
-    return result.affectedRows > 0;
+    try {
+      const [result] = await pool.query(
+        'UPDATE usuarios SET activo = NOT activo WHERE id = ?',
+        [id]
+      );
+      return result.affectedRows > 0;
+    } catch (error) {
+      console.error('❌ ERROR en toggleActivo:', error.message);
+      throw error;
+    }
   },
 
   /**
@@ -108,6 +125,19 @@ const usuarioModel = {
       [id]
     );
     return result.affectedRows > 0;
+  },
+
+  /**
+   * Obtener evaluadores (solo los que tienen rol evaluador)
+   */
+  async getEvaluadores() {
+    const [rows] = await pool.query(
+      `SELECT id, cedula, nombre, email, telefono, rol, departamento, activo 
+       FROM usuarios 
+       WHERE rol = 'evaluador' 
+       ORDER BY nombre ASC`
+    );
+    return rows;
   }
 };
 
