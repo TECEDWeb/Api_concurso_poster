@@ -8,8 +8,12 @@ const concursoModel = {
       FROM concursos
       ORDER BY created_at DESC
     `);
-
     return rows;
+  },
+
+  // Alias para compatibilidad
+  async obtenerTodos() {
+    return this.listar();
   },
 
   async buscarPorId(id) {
@@ -20,8 +24,12 @@ const concursoModel = {
        LIMIT 1`,
       [id]
     );
-
     return rows[0] || null;
+  },
+
+  // Alias para compatibilidad
+  async obtenerPorId(id) {
+    return this.buscarPorId(id);
   },
 
   async crear(data) {
@@ -54,7 +62,6 @@ const concursoModel = {
   },
 
   async actualizar(id, data) {
-
     const {
       nombre,
       descripcion,
@@ -77,11 +84,11 @@ const concursoModel = {
        WHERE id=?`,
       [
         nombre,
-        descripcion,
-        tipo,
-        fecha_inicio,
-        fecha_fin,
-        puntaje_maximo,
+        descripcion || null,
+        tipo || null,
+        fecha_inicio || null,
+        fecha_fin || null,
+        puntaje_maximo || null,
         activo,
         id
       ]
@@ -89,15 +96,12 @@ const concursoModel = {
   },
 
   async eliminar(id) {
-
     await pool.query(
       `DELETE FROM concursos
        WHERE id=?`,
       [id]
     );
-
   }
-
 };
 
 module.exports = concursoModel;

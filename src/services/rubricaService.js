@@ -6,16 +6,17 @@ const Criterio = require('../model/criterioModel');
 class RubricaService {
 
   static async listar() {
-    // Usar el método correcto: listar() en lugar de obtenerTodos()
+    // Usar el método listar()
     const concursos = await Concurso.listar();
     const resultado = [];
 
     for (const concurso of concursos) {
+      // Usar obtenerPorConcurso (que ahora existe como alias)
       const niveles = await Nivel.obtenerPorConcurso(concurso.id);
-      const secciones = await Seccion.getByConcurso(concurso.id);
+      const secciones = await Seccion.obtenerPorConcurso(concurso.id);
 
       for (const seccion of secciones) {
-        seccion.criterios = await Criterio.getBySeccion(seccion.id);
+        seccion.criterios = await Criterio.obtenerPorSeccion(seccion.id);
       }
 
       resultado.push({
@@ -33,10 +34,10 @@ class RubricaService {
     if (!concurso) return null;
 
     const niveles = await Nivel.obtenerPorConcurso(concursoId);
-    const secciones = await Seccion.getByConcurso(concursoId);
+    const secciones = await Seccion.obtenerPorConcurso(concursoId);
 
     for (const seccion of secciones) {
-      seccion.criterios = await Criterio.getBySeccion(seccion.id);
+      seccion.criterios = await Criterio.obtenerPorSeccion(seccion.id);
     }
 
     return {
@@ -62,11 +63,8 @@ class RubricaService {
   }
 
   static async exportar(id) {
-    // Implementar exportación de rúbrica a Excel
     const rubrica = await this.obtener(id);
     if (!rubrica) return null;
-
-    // Aquí iría la lógica para generar el Excel
     return Buffer.from('Rubrica exportada');
   }
 }
