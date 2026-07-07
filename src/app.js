@@ -23,11 +23,10 @@ app.use(cors({
     'https://evaluacion.teced.org',
     'https://apievaluacion.teced.org'
   ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'], // ← AÑADIR PATCH
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'], // ← Asegurar que PATCH está incluido
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
   credentials: true
 }));
-
 // Manejar explícitamente OPTIONS para todas las rutas
 app.options('*', cors());
 

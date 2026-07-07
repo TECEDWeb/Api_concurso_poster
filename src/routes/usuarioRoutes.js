@@ -61,7 +61,7 @@ router.post(
 );
 
 // ==============================
-// ACTUALIZAR USUARIO (PUT) - ¡ESTA ES LA RUTA QUE FALTABA!
+// ACTUALIZAR USUARIO (PUT)
 // ==============================
 router.put(
   '/:id',
@@ -71,7 +71,17 @@ router.put(
 );
 
 // ==============================
-// CAMBIAR ESTADO (PATCH)
+// CAMBIAR ESTADO - PUT (para frontend)
+// ==============================
+router.put(
+  '/:id/estado',
+  authMiddleware,
+  roleMiddleware('admin'),
+  usuarioController.toggleActivo
+);
+
+// ==============================
+// CAMBIAR ESTADO - PATCH (alternativa REST)
 // ==============================
 router.patch(
   '/:id/estado',
@@ -114,6 +124,16 @@ router.get(
       mensaje: `Hola ${req.usuario.nombre}, tu rol es ${req.usuario.rol}`
     });
   }
+);
+
+// ==============================
+// CAMBIAR ESTADO - POST (alternativa)
+// ==============================
+router.post(
+  '/:id/toggle-estado',
+  authMiddleware,
+  roleMiddleware('admin'),
+  usuarioController.toggleActivo
 );
 
 module.exports = router;
