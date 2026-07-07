@@ -14,7 +14,7 @@ const asignacionRoutes = require('./routes/asignacionRoutes');
 const app = express();
 
 // =========================
-// MIDDLEWARE
+// MIDDLEWARE CORS - CORREGIDO
 // =========================
 app.use(cors({
   origin: [
@@ -23,11 +23,14 @@ app.use(cors({
     'https://evaluacion.teced.org',
     'https://apievaluacion.teced.org'
   ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-   credentials: true 
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'], // ← AÑADIR PATCH
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  credentials: true
 }));
+
+// Manejar explícitamente OPTIONS para todas las rutas
 app.options('*', cors());
+
 app.use(express.json());
 
 // =========================
@@ -42,6 +45,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/concursos', concursoRoutes);
 app.use('/api/reportes', reportesRoutes);
 app.use('/api/asignaciones', asignacionRoutes);
+
 // =========================
 // HEALTH CHECK
 // =========================
