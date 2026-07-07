@@ -1,9 +1,9 @@
 const db = require('../config/db');
 
 
-// ======================================================
+// =====================================
 // STATS GENERALES
-// ======================================================
+// =====================================
 exports.stats = async (req, res) => {
 
   try {
@@ -30,11 +30,11 @@ exports.stats = async (req, res) => {
 
       data: {
 
-        proyectos: proyectos.total || 0,
+        proyectos: proyectos.total,
 
-        evaluaciones: evaluaciones.total || 0,
+        evaluaciones: evaluaciones.total,
 
-        completadas: evaluaciones.total || 0,
+        completadas: evaluaciones.total,
 
         promedio: 0
 
@@ -43,7 +43,7 @@ exports.stats = async (req, res) => {
     });
 
 
-  } catch (error) {
+  } catch(error){
 
     console.error(
       'ERROR STATS:',
@@ -55,7 +55,7 @@ exports.stats = async (req, res) => {
 
       ok:false,
 
-      mensaje:'Error al obtener estadísticas'
+      mensaje:'Error obteniendo estadísticas'
 
     });
 
@@ -66,22 +66,19 @@ exports.stats = async (req, res) => {
 
 
 
-
-// ======================================================
+// =====================================
 // RANKING GENERAL
-// ======================================================
+// =====================================
 exports.ranking = async (req,res)=>{
 
-  try {
+  try{
 
 
     const [rows] = await db.query(`
 
       SELECT
 
-        p.id,
-
-        p.nombre,
+        p.nombre AS proyecto,
 
 
         ROUND(
@@ -93,44 +90,30 @@ exports.ranking = async (req,res)=>{
         ROUND(
           AVG(n.puntaje),
           2
-        ) AS promedio,
+        ) AS promedio
 
 
-        COUNT(DISTINCT e.id)
-          AS evaluaciones
+      FROM evaluaciones e
 
 
-
-      FROM proyectos p
-
-
-      INNER JOIN evaluaciones e
-
-        ON e.proyecto_id = p.id
+      INNER JOIN proyectos p
+        ON p.id = e.proyecto_id
 
 
       INNER JOIN detalles_evaluacion d
-
         ON d.evaluacion_id = e.id
 
 
       INNER JOIN niveles n
-
         ON n.id = d.nivel_id
 
 
-
       GROUP BY
-
         p.id,
-
         p.nombre
 
 
-
-      ORDER BY
-
-        promedio DESC
+      ORDER BY promedio DESC
 
 
     `);
@@ -147,7 +130,7 @@ exports.ranking = async (req,res)=>{
 
 
 
-  } catch(error){
+  }catch(error){
 
 
     console.error(
@@ -160,13 +143,11 @@ exports.ranking = async (req,res)=>{
 
       ok:false,
 
-      mensaje:'Error al generar ranking'
+      mensaje:'Error generando ranking'
 
     });
 
-
   }
-
 
 };
 
@@ -174,11 +155,10 @@ exports.ranking = async (req,res)=>{
 
 
 
-
-// ======================================================
+// =====================================
 // REPORTES POR PROYECTO
-// ======================================================
-exports.proyectos = async (req,res)=>{
+// =====================================
+exports.proyectos = async(req,res)=>{
 
 
   try{
@@ -186,18 +166,14 @@ exports.proyectos = async (req,res)=>{
 
     const [rows] = await db.query(`
 
-
       SELECT
-
-
-        p.id,
 
 
         p.nombre AS proyecto,
 
 
         COUNT(DISTINCT e.id)
-          AS evaluaciones,
+        AS evaluaciones,
 
 
         ROUND(
@@ -222,7 +198,6 @@ exports.proyectos = async (req,res)=>{
 
 
       FROM proyectos p
-
 
 
       LEFT JOIN evaluaciones e
@@ -272,47 +247,39 @@ exports.proyectos = async (req,res)=>{
 
 
 
-    const resultado = [];
+    const proyectos=[];
 
 
 
     rows.forEach(row=>{
 
 
-      let proyecto = resultado.find(
-        item => item.proyecto === row.proyecto
-      );
-
+      let proyecto =
+        proyectos.find(
+          p=>p.proyecto===row.proyecto
+        );
 
 
       if(!proyecto){
 
 
-        proyecto = {
+        proyecto={
 
+          proyecto:row.proyecto,
 
-          proyecto: row.proyecto,
+          evaluaciones:row.evaluaciones,
 
-
-          evaluaciones:
-            row.evaluaciones || 0,
-
-
-          promedio:
-            row.promedio || 0,
-
+          promedio:row.promedio,
 
           evaluadores:[]
 
         };
 
 
-
-        resultado.push(proyecto);
+        proyectos.push(proyecto);
 
 
       }
-
 
 
 
@@ -321,24 +288,16 @@ exports.proyectos = async (req,res)=>{
 
         proyecto.evaluadores.push({
 
+          nombre:row.evaluador,
 
-          nombre:
-            row.evaluador,
+          rol:row.rol,
 
-
-          rol:
-            row.rol,
-
-
-          puntaje:
-            row.puntaje || 0
-
+          puntaje:row.puntaje
 
         });
 
 
       }
-
 
 
     });
@@ -349,7 +308,7 @@ exports.proyectos = async (req,res)=>{
 
       ok:true,
 
-      data:resultado
+      data:proyectos
 
     });
 
@@ -359,23 +318,18 @@ exports.proyectos = async (req,res)=>{
 
 
     console.error(
-
       'ERROR REPORTES PROYECTOS:',
-
       error
-
     );
-
 
 
     return res.status(500).json({
 
       ok:false,
 
-      mensaje:'Error al obtener reportes por proyecto'
+      mensaje:'Error obteniendo reportes'
 
     });
-
 
 
   }
@@ -386,24 +340,13 @@ exports.proyectos = async (req,res)=>{
 
 
 
-
-
-
-// ======================================================
+// =====================================
 // EXPORTAR REPORTE
-// ======================================================
+// =====================================
 exports.exportar = async(req,res)=>{
 
 
   try{
-
-
-    /*
-      Aquí después podemos colocar ExcelJS
-      para generar el archivo .xlsx
-
-      Por ahora devuelve respuesta válida
-    */
 
 
     return res.json({
@@ -411,8 +354,7 @@ exports.exportar = async(req,res)=>{
       ok:true,
 
       mensaje:
-        'Exportación disponible próximamente'
-
+      'Exportación disponible próximamente'
 
     });
 
@@ -422,11 +364,8 @@ exports.exportar = async(req,res)=>{
 
 
     console.error(
-
       'ERROR EXPORTAR:',
-
       error
-
     );
 
 
@@ -434,10 +373,9 @@ exports.exportar = async(req,res)=>{
 
       ok:false,
 
-      mensaje:'Error al exportar reporte'
+      mensaje:'Error exportando reporte'
 
     });
-
 
 
   }
