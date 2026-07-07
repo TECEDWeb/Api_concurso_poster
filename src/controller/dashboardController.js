@@ -4,7 +4,7 @@ const dashboardController = {
 
   /**
    * GET /api/dashboard/admin
-   * GET /api/dashboard/admin/resumen (para compatibilidad)
+   * GET /api/dashboard/admin/resumen
    */
   async adminDashboard(req, res) {
     try {
@@ -17,11 +17,12 @@ const dashboardController = {
       // Mapear los campos para que coincidan con lo que espera el frontend
       const responseData = {
         usuarios: data.usuarios || 0,
-        concursos: data.concursos || data.proyectos || 0, // Si no hay concursos, usar proyectos
+        concursos: data.concursos || data.proyectos || 0,
         proyectos: data.proyectos || 0,
-        reportes: data.evaluaciones || data.reportes || 0, // Si no hay reportes, usar evaluaciones
-        // También mantener los campos originales por si acaso
-        ...data
+        reportes: data.evaluaciones || data.reportes || 0,
+        evaluaciones: data.evaluaciones || 0,
+        completadas: data.completadas || 0,
+        promedio: data.promedio || 0
       };
 
       return res.json({
@@ -30,10 +31,7 @@ const dashboardController = {
       });
 
     } catch (error) {
-
-      console.log('🔴 ERROR REAL DASHBOARD:');
-      console.error(error);
-
+      console.error('🔴 ERROR DASHBOARD:', error);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al cargar dashboard',
@@ -43,11 +41,11 @@ const dashboardController = {
   },
 
   /**
-   * GET /api/dashboard/admin/resumen - Alias para compatibilidad
+   * GET /api/dashboard/admin/resumen - Alias
    */
   async adminResumen(req, res) {
-    // Redirigir al mismo método
-    return this.adminDashboard(req, res);
+    // Usar el mismo método directamente
+    return dashboardController.adminDashboard(req, res);
   },
 
   /**
