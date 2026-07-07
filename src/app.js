@@ -11,10 +11,12 @@ const dashboardRoutes = require('./routes/dashboardRoutes');
 const concursoRoutes = require('./routes/concursoRoutes');
 const reportesRoutes = require('./routes/reporteRoutes');
 const asignacionRoutes = require('./routes/asignacionRoutes');
+const rubricaRoutes = require('./routes/rubricaRoutes'); // ← AÑADIR ESTA LÍNEA
+
 const app = express();
 
 // =========================
-// MIDDLEWARE CORS - CORREGIDO
+// MIDDLEWARE CORS
 // =========================
 app.use(cors({
   origin: [
@@ -23,13 +25,12 @@ app.use(cors({
     'https://evaluacion.teced.org',
     'https://apievaluacion.teced.org'
   ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'], // ← Asegurar que PATCH está incluido
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
   credentials: true
 }));
-// Manejar explícitamente OPTIONS para todas las rutas
-app.options('*', cors());
 
+app.options('*', cors());
 app.use(express.json());
 
 // =========================
@@ -44,6 +45,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/concursos', concursoRoutes);
 app.use('/api/reportes', reportesRoutes);
 app.use('/api/asignaciones', asignacionRoutes);
+app.use('/api/rubricas', rubricaRoutes); // ← AÑADIR ESTA LÍNEA
 
 // =========================
 // HEALTH CHECK
@@ -72,6 +74,7 @@ app.get('/api', (req, res) => {
       dashboard: '/api/dashboard',
       concursos: '/api/concursos',
       reportes: '/api/reportes',
+      rubricas: '/api/rubricas', // ← AÑADIR
       health: '/api/health'
     }
   });
