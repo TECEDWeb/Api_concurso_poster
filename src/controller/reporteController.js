@@ -343,28 +343,167 @@ exports.proyectos = async(req,res)=>{
 // =====================================
 // EXPORTAR REPORTE
 // =====================================
+// =====================================
+// EXPORTAR REPORTE EXCEL
+// =====================================
 exports.exportar = async(req,res)=>{
 
+  try {
 
-  try{
+
+    const [rows] = await db.query(`
+
+      SELECT
+
+        p.nombre AS proyecto,
+
+        u.nombre AS evaluador,
+
+        u.rol,
+
+        ROUND(
+          SUM(n.puntaje),
+          2
+        ) AS puntaje,
 
 
-    return res.json({
+        ROUND(
+          AVG(n.puntaje),
+          2
+        ) AS promedio
 
-      ok:true,
 
-      mensaje:
-      'Exportación disponible próximamente'
+
+      FROM proyectos p
+
+
+      LEFT JOIN evaluaciones e
+        ON e.proyecto_id = p.id
+
+
+      LEFT JOIN detalles_evaluacion d
+        ON d.evaluacion_id = e.id
+
+
+      LEFT JOIN niveles n
+        ON n.id = d.nivel_id
+
+
+      LEFT JOIN usuarios u
+        ON u.id = e.evaluador_id
+
+
+      GROUP BY
+
+        p.nombre,
+        u.nombre,
+        u.rol
+
+
+      ORDER BY
+
+        p.nombre ASC
+
+
+    `);
+
+
+
+    const ExcelJS = require('exceljs');
+
+
+    const workbook =
+      new ExcelJS.Workbook();
+
+
+
+    const sheet =
+      workbook.addWorksheet(
+        'Reporte Evaluaciones'
+      );
+
+
+
+    sheet.columns = [
+
+      {
+        header:'Proyecto',
+        key:'proyecto',
+        width:30
+      },
+
+
+      {
+        header:'Evaluador',
+        key:'evaluador',
+        width:30
+      },
+
+
+      {
+        header:'Rol',
+        key:'rol',
+        width:20
+      },
+
+
+      {
+        header:'Puntaje',
+        key:'puntaje',
+        width:15
+      },
+
+
+      {
+        header:'Promedio',
+        key:'promedio',
+        width:15
+      }
+
+    ];
+
+
+
+    rows.forEach(row=>{
+
+      sheet.addRow(row);
 
     });
 
 
 
-  }catch(error){
+    sheet.getRow(1).font = {
+      bold:true
+    };
+
+
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+
+
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename=reporte-evaluaciones.xlsx'
+    );
+
+
+
+    await workbook.xlsx.write(res);
+
+
+
+    res.end();
+
+
+
+  } catch(error){
 
 
     console.error(
-      'ERROR EXPORTAR:',
+      'ERROR EXPORTAR EXCEL:',
       error
     );
 
@@ -373,12 +512,13 @@ exports.exportar = async(req,res)=>{
 
       ok:false,
 
-      mensaje:'Error exportando reporte'
+      mensaje:
+      'Error generando Excel'
 
     });
 
 
   }
 
-
 };
+
