@@ -20,6 +20,27 @@ const NivelModel = {
     );
 
     return { id: result.insertId, ...data };
+  },
+
+  async update(id, data) {
+    const { nombre, puntaje, descripcion } = data;
+
+    await db.query(
+      `UPDATE niveles 
+       SET nombre = ?, puntaje = ?, descripcion = ?
+       WHERE id = ?`,
+      [nombre, puntaje, descripcion, id]
+    );
+
+    return { id, ...data };
+  },
+
+  async delete(id) {
+    await db.query(
+      `DELETE FROM niveles WHERE id = ?`,
+      [id]
+    );
+    return true;
   }
 };
 

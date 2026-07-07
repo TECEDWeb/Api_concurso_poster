@@ -6,15 +6,16 @@ const Criterio = require('../model/criterioModel');
 class RubricaService {
 
   static async listar() {
-    const concursos = await Concurso.obtenerTodos();
+    // Usar el método correcto: listar() en lugar de obtenerTodos()
+    const concursos = await Concurso.listar();
     const resultado = [];
 
     for (const concurso of concursos) {
       const niveles = await Nivel.obtenerPorConcurso(concurso.id);
-      const secciones = await Seccion.obtenerPorConcurso(concurso.id);
+      const secciones = await Seccion.getByConcurso(concurso.id);
 
       for (const seccion of secciones) {
-        seccion.criterios = await Criterio.obtenerPorSeccion(seccion.id);
+        seccion.criterios = await Criterio.getBySeccion(seccion.id);
       }
 
       resultado.push({
@@ -28,14 +29,14 @@ class RubricaService {
   }
 
   static async obtener(concursoId) {
-    const concurso = await Concurso.obtenerPorId(concursoId);
+    const concurso = await Concurso.buscarPorId(concursoId);
     if (!concurso) return null;
 
     const niveles = await Nivel.obtenerPorConcurso(concursoId);
-    const secciones = await Seccion.obtenerPorConcurso(concursoId);
+    const secciones = await Seccion.getByConcurso(concursoId);
 
     for (const seccion of secciones) {
-      seccion.criterios = await Criterio.obtenerPorSeccion(seccion.id);
+      seccion.criterios = await Criterio.getBySeccion(seccion.id);
     }
 
     return {
@@ -47,7 +48,6 @@ class RubricaService {
 
   static async crear(data) {
     // Implementar creación de rúbrica
-    // Esto dependerá de cómo quieras estructurar la creación
     return data;
   }
 
@@ -67,7 +67,6 @@ class RubricaService {
     if (!rubrica) return null;
 
     // Aquí iría la lógica para generar el Excel
-    // Por ahora retornamos un buffer vacío
     return Buffer.from('Rubrica exportada');
   }
 }
