@@ -1,9 +1,5 @@
 const db = require('../config/db');
 
-
-// =========================
-// STATS GENERALES
-// =========================
 exports.stats = async (req, res) => {
 
   try {
@@ -278,6 +274,81 @@ mensaje:
 
 }
 
+exports.proyectos = async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT
+        p.id,
+        p.nombre AS proyecto,
+        COUNT(DISTINCT e.id) AS evaluaciones,
+        ROUND(
+          AVG(n.puntaje),
+          2
+        ) AS promedio,
+        u.nombre AS evaluador,
+        u.rol,
+        ROUND(
+          SUM(n.puntaje),
+          2
+        ) AS puntaje
+      FROM proyectos p
+      LEFT JOIN evaluaciones e
+        ON e.proyecto_id = p.id
+      LEFT JOIN detalles_evaluacion d
+        ON d.evaluacion_id = e.id
+      LEFT JOIN niveles n
+        ON n.id = d.nivel_id
+      LEFT JOIN usuarios u
+        ON u.id = e.evaluador_id
+      GROUP BY
+        p.id,
+        p.nombre,
+        u.id,
+        u.nombre,
+        u.rol
+      ORDER BY
+        p.nombre ASC,
+        promedio DESC
+    `);
 
+    const proyectos = [];
+    rows.forEach(row => {
+      let proyecto = proyectos.find(
+        p => p.proyecto === row.proyecto
+      );
+      if (!proyecto) {
+        proyecto = {
+          proyecto: row.proyecto,
+          evaluaciones: row.evaluaciones,
+          promedio: row.promedio,
+          evaluadores: []
+        };
+        proyectos.push(proyecto);
+      }
+
+      if(row.evaluador){
+        proyecto.evaluadores.push({
+          nombre: row.evaluador,
+          rol: row.rol,
+          puntaje: row.puntaje
+        });
+      }
+    });
+    return res.json({
+      ok:true,
+      data: proyectos
+    });
+
+  } catch(error){
+    console.error(
+      'ERROR REPORTES PROYECTOS:',
+      error
+    );
+    return res.status(500).json({
+      ok:false,
+      mensaje:'Error al obtener reportes por proyecto'
+    });
+  }
+};
 
 };
