@@ -3,7 +3,7 @@ const router = express.Router();
 
 const authMiddleware = require('../middleware/authMiddleware');
 const roleMiddleware = require('../middleware/roleMiddleware');
-const usuarioModel = require('../model/usuarioModel');
+const usuarioController = require('../controller/usuarioController');
 
 console.log('======================================');
 console.log('✅ usuarioRoutes.js CARGADO');
@@ -13,14 +13,11 @@ console.log('======================================');
 // PRUEBA
 // ==============================
 router.get('/ping', (req, res) => {
-
   console.log('🏓 PING usuarios');
-
   res.json({
     ok: true,
     mensaje: 'usuarioRoutes funcionando correctamente'
   });
-
 });
 
 // ==============================
@@ -30,38 +27,77 @@ router.get(
   '/',
   authMiddleware,
   roleMiddleware('admin'),
-  async (req, res) => {
+  usuarioController.listar
+);
 
-    console.log('📥 GET /api/usuarios');
+// ==============================
+// LISTAR EVALUADORES
+// ==============================
+router.get(
+  '/evaluadores',
+  authMiddleware,
+  roleMiddleware('admin'),
+  usuarioController.getEvaluadores
+);
 
-    try {
+// ==============================
+// OBTENER USUARIO POR ID
+// ==============================
+router.get(
+  '/:id',
+  authMiddleware,
+  roleMiddleware('admin'),
+  usuarioController.getById
+);
 
-      const { rol } = req.query;
+// ==============================
+// CREAR USUARIO
+// ==============================
+router.post(
+  '/',
+  authMiddleware,
+  roleMiddleware('admin'),
+  usuarioController.create
+);
 
-      console.log('Rol solicitado:', rol);
+// ==============================
+// ACTUALIZAR USUARIO (PUT) - ¡ESTA ES LA RUTA QUE FALTABA!
+// ==============================
+router.put(
+  '/:id',
+  authMiddleware,
+  roleMiddleware('admin'),
+  usuarioController.actualizar
+);
 
-      const usuarios = await usuarioModel.listar({ rol });
+// ==============================
+// CAMBIAR ESTADO (PATCH)
+// ==============================
+router.patch(
+  '/:id/estado',
+  authMiddleware,
+  roleMiddleware('admin'),
+  usuarioController.toggleActivo
+);
 
-      console.log('Usuarios encontrados:', usuarios.length);
+// ==============================
+// RESETEAR CONTRASEÑA
+// ==============================
+router.post(
+  '/:id/reset-password',
+  authMiddleware,
+  roleMiddleware('admin'),
+  usuarioController.resetPassword
+);
 
-      return res.json({
-        ok: true,
-        usuarios: Array.isArray(usuarios) ? usuarios : []
-      });
-
-    } catch (error) {
-
-      console.error('❌ Error listando usuarios');
-      console.error(error);
-
-      return res.status(500).json({
-        ok: false,
-        usuarios: []
-      });
-
-    }
-
-  }
+// ==============================
+// ELIMINAR USUARIO
+// ==============================
+router.delete(
+  '/:id',
+  authMiddleware,
+  roleMiddleware('admin'),
+  usuarioController.eliminar
 );
 
 // ==============================
@@ -72,56 +108,11 @@ router.get(
   authMiddleware,
   roleMiddleware('admin', 'evaluador'),
   (req, res) => {
-
     console.log('📥 GET /api/usuarios/ejemplo-multi-rol');
-
     res.json({
       ok: true,
       mensaje: `Hola ${req.usuario.nombre}, tu rol es ${req.usuario.rol}`
     });
-
-  }
-);
-
-// ==============================
-// LISTAR EVALUADORES
-// ==============================
-router.get(
-  '/evaluadores',
-  authMiddleware,
-  roleMiddleware('admin'),
-  async (req, res) => {
-
-    console.log('======================================');
-    console.log('📥 GET /api/usuarios/evaluadores');
-    console.log('Usuario autenticado:', req.usuario);
-    console.log('======================================');
-
-    try {
-
-      const evaluadores = await usuarioModel.listar({
-        rol: 'evaluador'
-      });
-
-      console.log(`✅ Evaluadores encontrados: ${evaluadores.length}`);
-
-      return res.json({
-        ok: true,
-        data: evaluadores
-      });
-
-    } catch (error) {
-
-      console.error('❌ ERROR EN /usuarios/evaluadores');
-      console.error(error);
-
-      return res.status(500).json({
-        ok: false,
-        mensaje: 'Error obteniendo evaluadores'
-      });
-
-    }
-
   }
 );
 

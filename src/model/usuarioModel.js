@@ -13,9 +13,6 @@ const usuarioModel = {
     return rows[0] || null;
   },
 
-  /**
-   * Busca un usuario por id (útil para validar el token en cada request).
-   */
   async buscarPorId(id) {
     const [rows] = await pool.query(
       `SELECT id, cedula, nombre, email, telefono, rol, departamento, activo
@@ -27,10 +24,6 @@ const usuarioModel = {
     return rows[0] || null;
   },
 
-  /**
-   * Crea un nuevo usuario (administrador o evaluador).
-   * password_hash debe llegar YA hasheado (lo hace authService).
-   */
   async crear({ cedula, nombre, email, telefono, password_hash, rol, departamento }) {
     const [result] = await pool.query(
       `INSERT INTO usuarios (cedula, nombre, email, telefono, password_hash, rol, departamento)
@@ -41,9 +34,33 @@ const usuarioModel = {
   },
 
   /**
-   * Lista usuarios, opcionalmente filtrados por rol.
-   * Pensado para que el administrador gestione evaluadores.
+   * Actualizar usuario existente
    */
+  async actualizar(id, { cedula, nombre, email, telefono, rol, departamento, activo, password_hash }) {
+    let query = `UPDATE usuarios SET 
+      cedula = ?,
+      nombre = ?,
+      email = ?,
+      telefono = ?,
+      rol = ?,
+      departamento = ?,
+      activo = ?
+    `;
+    const params = [cedula, nombre, email || null, telefono || null, rol, departamento || null, activo];
+
+    // Si se proporciona password_hash, actualizarlo
+    if (password_hash) {
+      query += `, password_hash = ?`;
+      params.push(password_hash);
+    }
+
+    query += ` WHERE id = ?`;
+    params.push(id);
+
+    const [result] = await pool.query(query, params);
+    return result.affectedRows > 0;
+  },
+
   async listar({ rol } = {}) {
     if (rol) {
       const [rows] = await pool.query(
@@ -59,6 +76,39 @@ const usuarioModel = {
     );
     return rows;
   },
+
+  /**
+   * Cambiar estado de un usuario (activo/inactivo)
+   */
+  async toggleActivo(id) {
+    const [result] = await pool.query(
+      'UPDATE usuarios SET activo = NOT activo WHERE id = ?',
+      [id]
+    );
+    return result.affectedRows > 0;
+  },
+
+  /**
+   * Resetear contraseña de un usuario
+   */
+  async resetPassword(id, newPasswordHash) {
+    const [result] = await pool.query(
+      'UPDATE usuarios SET password_hash = ? WHERE id = ?',
+      [newPasswordHash, id]
+    );
+    return result.affectedRows > 0;
+  },
+
+  /**
+   * Eliminar un usuario
+   */
+  async eliminar(id) {
+    const [result] = await pool.query(
+      'DELETE FROM usuarios WHERE id = ?',
+      [id]
+    );
+    return result.affectedRows > 0;
+  }
 };
 
 module.exports = usuarioModel;
