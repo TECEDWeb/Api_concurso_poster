@@ -308,15 +308,38 @@ exports.proyectos = async (req,res)=>{
 
   }
 
-  exports.exportar = async(req,res)=>{
+  // =========================
+  // EXPORTAR REPORTE
+  // =========================
+  exports.exportar = async (req, res) => {
+    try {
 
-  return res.json({
+      return res.json({
 
-    ok:true,
+        ok: true,
 
-    mensaje:'Exportación pendiente'
+        mensaje: 'Exportación disponible próximamente'
 
-  });
+      });
 
-};
+
+    } catch(error) {
+
+      console.error(
+        'ERROR EXPORTAR:',
+        error
+      );
+
+
+      return res.status(500).json({
+
+        ok:false,
+
+        mensaje:'Error al exportar reporte'
+
+      });
+
+    }
+
+  };
 };
