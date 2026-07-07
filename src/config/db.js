@@ -13,14 +13,13 @@ const pool = mysql.createPool({
   dateStrings: true,
 });
 
-// Test de conexión al iniciar
 (async () => {
   try {
     const connection = await pool.getConnection();
-    console.log(`✅ DB conectada: ${process.env.DB_NAME} en ${process.env.DB_HOST}`);
+    console.log(` DB conectada: ${process.env.DB_NAME} en ${process.env.DB_HOST}`);
     connection.release();
   } catch (error) {
-    console.error('❌ Error al conectar a la base de datos:', error.message);
+    console.error(' Error al conectar a la base de datos:', error.message);
   }
 })();
 
