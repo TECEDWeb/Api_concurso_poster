@@ -1,4 +1,5 @@
 const Concurso = require('../model/concursoModel');
+const Rubrica = require('../model/rubricaModel');
 const Nivel = require('../model/nivelModel');
 const Seccion = require('../model/seccionModel');
 const Criterio = require('../model/criterioModel');
@@ -6,23 +7,36 @@ const Criterio = require('../model/criterioModel');
 class RubricaService {
 
   static async listar() {
-    // Usar el método listar()
-    const concursos = await Concurso.listar();
+    // Obtener todas las rúbricas
+    const rubricas = await Rubrica.getAll();
     const resultado = [];
 
-    for (const concurso of concursos) {
-      // Usar obtenerPorConcurso (que ahora existe como alias)
-      const niveles = await Nivel.obtenerPorConcurso(concurso.id);
-      const secciones = await Seccion.obtenerPorConcurso(concurso.id);
+    for (const rubrica of rubricas) {
+      // Obtener secciones de la rúbrica (a través del concurso)
+      const secciones = await Seccion.obtenerPorConcurso(rubrica.concurso_id);
 
       for (const seccion of secciones) {
-        seccion.criterios = await Criterio.obtenerPorSeccion(seccion.id);
+        const criterios = await Criterio.obtenerPorRubrica(rubrica.id);
+        
+        for (const criterio of criterios) {
+          criterio.niveles = await Nivel.obtenerPorCriterio(criterio.id);
+        }
+        
+        seccion.criterios = criterios;
       }
 
+      // Obtener niveles generales del concurso
+      const nivelesGenerales = await Nivel.obtenerPorConcurso(rubrica.concurso_id);
+
       resultado.push({
-        concursoId: concurso.id,
-        secciones,
-        niveles
+        rubricaId: rubrica.id,
+        concursoId: rubrica.concurso_id,
+        nombre: rubrica.nombre,
+        descripcion: rubrica.descripcion,
+        puntajeMaximo: rubrica.puntaje_maximo,
+        estado: rubrica.estado,
+        secciones: secciones,
+        niveles: nivelesGenerales
       });
     }
 
@@ -30,35 +44,55 @@ class RubricaService {
   }
 
   static async obtener(concursoId) {
-    const concurso = await Concurso.buscarPorId(concursoId);
-    if (!concurso) return null;
+    const rubrica = await Rubrica.getByConcurso(concursoId);
+    if (!rubrica) return null;
 
-    const niveles = await Nivel.obtenerPorConcurso(concursoId);
     const secciones = await Seccion.obtenerPorConcurso(concursoId);
 
     for (const seccion of secciones) {
-      seccion.criterios = await Criterio.obtenerPorSeccion(seccion.id);
+      const criterios = await Criterio.obtenerPorRubrica(rubrica.id);
+      
+      for (const criterio of criterios) {
+        criterio.niveles = await Nivel.obtenerPorCriterio(criterio.id);
+      }
+      
+      seccion.criterios = criterios;
     }
 
+    const nivelesGenerales = await Nivel.obtenerPorConcurso(concursoId);
+
     return {
-      concursoId,
-      secciones,
-      niveles
+      rubricaId: rubrica.id,
+      concursoId: rubrica.concurso_id,
+      nombre: rubrica.nombre,
+      descripcion: rubrica.descripcion,
+      puntajeMaximo: rubrica.puntaje_maximo,
+      estado: rubrica.estado,
+      secciones: secciones,
+      niveles: nivelesGenerales
     };
   }
 
   static async crear(data) {
-    // Implementar creación de rúbrica
-    return data;
+    const { concurso_id, nombre, descripcion, puntaje_maximo } = data;
+    
+    const rubricaId = await Rubrica.create({
+      concurso_id,
+      nombre,
+      descripcion,
+      puntaje_maximo
+    });
+
+    return { id: rubricaId };
   }
 
   static async actualizar(id, data) {
-    // Implementar actualización de rúbrica
-    return data;
+    await Rubrica.update(id, data);
+    return { id, ...data };
   }
 
   static async eliminar(id) {
-    // Implementar eliminación de rúbrica
+    await Rubrica.delete(id);
     return true;
   }
 

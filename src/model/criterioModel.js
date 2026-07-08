@@ -15,13 +15,27 @@ const CriterioModel = {
     return this.getBySeccion(seccionId);
   },
 
+  // 🔥 NUEVO: Obtener criterios por rubrica_id
+  async getByRubrica(rubricaId) {
+    const [rows] = await db.query(
+      `SELECT * FROM criterios WHERE rubrica_id = ? ORDER BY orden ASC`,
+      [rubricaId]
+    );
+    return rows;
+  },
+
+  // Alias
+  async obtenerPorRubrica(rubricaId) {
+    return this.getByRubrica(rubricaId);
+  },
+
   async create(data) {
-    const { seccion_id, texto, orden } = data;
+    const { seccion_id, rubrica_id, texto, orden } = data;
 
     const [result] = await db.query(
-      `INSERT INTO criterios (seccion_id, texto, orden)
-       VALUES (?, ?, ?)`,
-      [seccion_id, texto, orden]
+      `INSERT INTO criterios (seccion_id, rubrica_id, texto, orden)
+       VALUES (?, ?, ?, ?)`,
+      [seccion_id || null, rubrica_id || null, texto, orden]
     );
 
     return { id: result.insertId, ...data };

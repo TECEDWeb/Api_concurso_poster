@@ -2,7 +2,7 @@ const db = require('../config/db');
 
 const NivelModel = {
 
-  // Método para obtener niveles por concurso
+  // Obtener niveles por concurso (niveles generales del concurso)
   async getByConcurso(concursoId) {
     const [rows] = await db.query(
       `SELECT * FROM niveles WHERE concurso_id = ? ORDER BY puntaje ASC`,
@@ -16,13 +16,27 @@ const NivelModel = {
     return this.getByConcurso(concursoId);
   },
 
+  // Obtener niveles por criterio (niveles específicos de un criterio)
+  async getByCriterio(criterioId) {
+    const [rows] = await db.query(
+      `SELECT * FROM niveles WHERE criterio_id = ? ORDER BY puntaje ASC`,
+      [criterioId]
+    );
+    return rows;
+  },
+
+  // Alias para compatibilidad
+  async obtenerPorCriterio(criterioId) {
+    return this.getByCriterio(criterioId);
+  },
+
   async create(data) {
-    const { concurso_id, nombre, puntaje, descripcion } = data;
+    const { concurso_id, criterio_id, nombre, puntaje, descripcion } = data;
 
     const [result] = await db.query(
-      `INSERT INTO niveles (concurso_id, nombre, puntaje, descripcion)
-       VALUES (?, ?, ?, ?)`,
-      [concurso_id, nombre, puntaje, descripcion || null]
+      `INSERT INTO niveles (concurso_id, criterio_id, nombre, puntaje, descripcion)
+       VALUES (?, ?, ?, ?, ?)`,
+      [concurso_id || null, criterio_id || null, nombre, puntaje, descripcion || null]
     );
 
     return { id: result.insertId, ...data };
@@ -49,7 +63,6 @@ const NivelModel = {
     return true;
   },
 
-  // Obtener nivel por ID
   async getById(id) {
     const [rows] = await db.query(
       `SELECT * FROM niveles WHERE id = ?`,
