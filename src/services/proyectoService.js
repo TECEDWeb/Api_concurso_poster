@@ -1,11 +1,5 @@
 const db = require('../config/db');
 
-const logSQL = (query, params) => {
-  console.log('\n🟦 SQL QUERY:');
-  console.log(query);
-  console.log('PARAMS:', params);
-};
-
 const ProyectoService = {
 
   async getAll() {
@@ -15,6 +9,7 @@ const ProyectoService = {
         p.concurso_id,
         p.nombre,
         p.descripcion,
+        p.estudiante_nombre,
         p.activo,
         p.created_at,
         c.nombre AS concurso_nombre
@@ -23,11 +18,13 @@ const ProyectoService = {
       ORDER BY p.id DESC
     `;
 
-    logSQL(query, []);
+    console.log('🟦 SQL QUERY:', query);
+    console.log('PARAMS: []');
 
     const [rows] = await db.query(query);
 
     console.log('📊 getAll rows:', rows.length);
+    console.log('✅ Proyectos obtenidos:', rows.length);
 
     return rows;
   },
@@ -35,7 +32,8 @@ const ProyectoService = {
   async getById(id) {
     const query = `SELECT * FROM proyectos WHERE id = ?`;
 
-    logSQL(query, [id]);
+    console.log('🟦 SQL QUERY:', query);
+    console.log('PARAMS:', [id]);
 
     const [rows] = await db.query(query, [id]);
 
@@ -43,24 +41,31 @@ const ProyectoService = {
   },
 
   async create(data) {
-
     console.log('📦 SERVICE CREATE INPUT:', data);
 
-    const { concursoId, nombre, descripcion } = data;
+    const { concurso_id, nombre, descripcion, estudiante_nombre, nivel, area, activo } = data;
+
+    // Validar que tenga estudiante_nombre
+    if (!estudiante_nombre || estudiante_nombre.trim() === '') {
+      throw new Error('El nombre del estudiante es obligatorio');
+    }
 
     const query = `
       INSERT INTO proyectos 
-        (concurso_id, nombre, descripcion, activo)
-      VALUES (?, ?, ?, 1)
+        (concurso_id, nombre, descripcion, estudiante_nombre, activo)
+      VALUES (?, ?, ?, ?, ?)
     `;
 
     const params = [
-      concursoId || null,
-      nombre,
-      descripcion || null
+      concurso_id || null,
+      nombre.trim(),
+      descripcion || null,
+      estudiante_nombre.trim(),
+      activo !== undefined ? activo : 1
     ];
 
-    logSQL(query, params);
+    console.log('🟦 SQL QUERY:', query);
+    console.log('PARAMS:', params);
 
     const [result] = await db.query(query, params);
 
@@ -68,34 +73,36 @@ const ProyectoService = {
 
     return {
       id: result.insertId,
-      concursoId,
+      concurso_id,
       nombre,
       descripcion,
-      activo: 1
+      estudiante_nombre,
+      activo: activo !== undefined ? activo : 1
     };
   },
 
   async update(id, data) {
-
     console.log('📦 UPDATE INPUT:', { id, data });
 
-    const { concursoId, nombre, descripcion, activo } = data;
+    const { concurso_id, nombre, descripcion, estudiante_nombre, activo } = data;
 
     const query = `
       UPDATE proyectos 
-      SET concurso_id = ?, nombre = ?, descripcion = ?, activo = ?
+      SET concurso_id = ?, nombre = ?, descripcion = ?, estudiante_nombre = ?, activo = ?
       WHERE id = ?
     `;
 
     const params = [
-      concursoId,
-      nombre,
-      descripcion,
-      activo,
+      concurso_id || null,
+      nombre || '',
+      descripcion || null,
+      estudiante_nombre || '',
+      activo !== undefined ? activo : 1,
       id
     ];
 
-    logSQL(query, params);
+    console.log('🟦 SQL QUERY:', query);
+    console.log('PARAMS:', params);
 
     await db.query(query, params);
 
@@ -107,29 +114,10 @@ const ProyectoService = {
 
     const query = `DELETE FROM proyectos WHERE id = ?`;
 
-    logSQL(query, [id]);
+    console.log('🟦 SQL QUERY:', query);
+    console.log('PARAMS:', [id]);
 
     await db.query(query, [id]);
-
-    return true;
-  },
-
-  async assignEvaluadores(proyectoId, evaluadoresIds) {
-
-    console.log('👥 ASSIGN EVALUADORES:', { proyectoId, evaluadoresIds });
-
-    await db.query(
-      `DELETE FROM proyecto_evaluador WHERE proyecto_id = ?`,
-      [proyectoId]
-    );
-
-    for (const evaluadorId of evaluadoresIds) {
-      await db.query(
-        `INSERT INTO proyecto_evaluador (proyecto_id, usuario_id)
-         VALUES (?, ?)`,
-        [proyectoId, evaluadorId]
-      );
-    }
 
     return true;
   }

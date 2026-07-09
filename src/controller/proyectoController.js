@@ -1,35 +1,19 @@
 const ProyectoService = require('../services/proyectoService');
 
-const log = (title, data) => {
-  console.log('\n==============================');
-  console.log(title);
-  console.log(JSON.stringify(data, null, 2));
-  console.log('==============================\n');
-};
-
 const proyectoController = {
 
-  /**
-   * GET /api/proyectos
-   */
   async getAll(req, res) {
     try {
       console.log('📥 GET /proyectos');
-
-      const data = await ProyectoService.getAll();
-
-      const safeData = data || [];
-
-      console.log('✅ Proyectos obtenidos:', safeData.length);
+      const proyectos = await ProyectoService.getAll();
 
       return res.json({
         ok: true,
-        data: safeData
+        data: proyectos
       });
 
-    } catch (err) {
-      console.error('❌ ERROR getAll proyectos:', err);
-
+    } catch (error) {
+      console.error('❌ ERROR get proyectos:', error);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al obtener proyectos'
@@ -37,17 +21,14 @@ const proyectoController = {
     }
   },
 
-
-  /**
-   * GET /api/proyectos/:id
-   */
   async getById(req, res) {
     try {
-      console.log('📥 GET BY ID:', req.params.id);
+      const id = parseInt(req.params.id);
+      console.log('📥 GET /proyectos/' + id);
 
-      const data = await ProyectoService.getById(req.params.id);
+      const proyecto = await ProyectoService.getById(id);
 
-      if (!data) {
+      if (!proyecto) {
         return res.status(404).json({
           ok: false,
           mensaje: 'Proyecto no encontrado'
@@ -56,12 +37,11 @@ const proyectoController = {
 
       return res.json({
         ok: true,
-        data
+        data: proyecto
       });
 
-    } catch (err) {
-      console.error('❌ ERROR getById proyecto:', err);
-
+    } catch (error) {
+      console.error('❌ ERROR get proyecto:', error);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al obtener proyecto'
@@ -69,124 +49,135 @@ const proyectoController = {
     }
   },
 
-
-  /**
-   * POST /api/proyectos
-   */
   async create(req, res) {
-    const start = Date.now();
-
-    console.log('\n==============================');
-    console.log('📥 CREATE PROYECTO');
-    console.log('BODY:', req.body);
-    console.log('==============================');
-
     try {
-      const nuevo = await ProyectoService.create(req.body);
+      console.log('==============================');
+      console.log('📥 CREATE PROYECTO');
+      console.log('BODY:', req.body);
+      console.log('==============================');
 
-      console.log('✅ PROYECTO CREADO');
-      console.log('⏱ ms:', Date.now() - start);
+      const { nombre, descripcion, concursoId, estudiante_nombre, nivel, area, activo } = req.body;
 
-      return res.status(201).json({
-        ok: true,
-        data: nuevo
-      });
-
-    } catch (err) {
-      console.error('❌ ERROR CREATE PROYECTO:', err);
-
-      return res.status(500).json({
-        ok: false,
-        mensaje: 'Error al crear proyecto'
-      });
-    }
-  },
-
-
-  /**
-   * PUT /api/proyectos/:id
-   */
-  async update(req, res) {
-    try {
-      console.log('📥 UPDATE:', req.params.id);
-
-      await ProyectoService.update(req.params.id, req.body);
-
-      return res.json({
-        ok: true,
-        mensaje: 'Proyecto actualizado'
-      });
-
-    } catch (err) {
-      console.error('❌ ERROR update proyecto:', err);
-
-      return res.status(500).json({
-        ok: false,
-        mensaje: 'Error al actualizar proyecto'
-      });
-    }
-  },
-
-
-  /**
-   * DELETE /api/proyectos/:id
-   */
-  async remove(req, res) {
-    try {
-      console.log('📥 DELETE:', req.params.id);
-
-      await ProyectoService.delete(req.params.id);
-
-      return res.json({
-        ok: true,
-        mensaje: 'Proyecto eliminado'
-      });
-
-    } catch (err) {
-      console.error('❌ ERROR delete proyecto:', err);
-
-      return res.status(500).json({
-        ok: false,
-        mensaje: 'Error al eliminar proyecto'
-      });
-    }
-  },
-
-
-  /**
-   * POST /api/proyectos/:id/evaluadores
-   */
-  async assignEvaluadores(req, res) {
-    try {
-      const { evaluadoresIds } = req.body;
-
-      if (!Array.isArray(evaluadoresIds)) {
+      // Validar que tenga nombre
+      if (!nombre || nombre.trim() === '') {
         return res.status(400).json({
           ok: false,
-          mensaje: 'evaluadoresIds debe ser un array'
+          mensaje: 'El nombre del proyecto es obligatorio'
         });
       }
 
-      await ProyectoService.assignEvaluadores(
-        req.params.id,
-        evaluadoresIds
-      );
+      // Validar que tenga estudiante_nombre
+      if (!estudiante_nombre || estudiante_nombre.trim() === '') {
+        return res.status(400).json({
+          ok: false,
+          mensaje: 'El nombre del estudiante es obligatorio'
+        });
+      }
+
+      const proyecto = await ProyectoService.create({
+        concurso_id: concursoId || null,
+        nombre: nombre.trim(),
+        descripcion: descripcion || null,
+        estudiante_nombre: estudiante_nombre.trim(),
+        nivel: nivel || null,
+        area: area || null,
+        activo: activo !== undefined ? activo : true
+      });
+
+      return res.status(201).json({
+        ok: true,
+        mensaje: 'Proyecto creado correctamente',
+        data: proyecto
+      });
+
+    } catch (error) {
+      console.error('❌ ERROR CREATE PROYECTO:', error);
+      return res.status(500).json({
+        ok: false,
+        mensaje: 'Error al crear proyecto: ' + error.message
+      });
+    }
+  },
+
+  async update(req, res) {
+    try {
+      const id = parseInt(req.params.id);
+      console.log('📥 UPDATE PROYECTO ID:', id);
+      console.log('BODY:', req.body);
+
+      const { nombre, descripcion, concursoId, estudiante_nombre, activo } = req.body;
+
+      // Validar que tenga nombre
+      if (!nombre || nombre.trim() === '') {
+        return res.status(400).json({
+          ok: false,
+          mensaje: 'El nombre del proyecto es obligatorio'
+        });
+      }
+
+      // Verificar si existe
+      const existente = await ProyectoService.getById(id);
+      if (!existente) {
+        return res.status(404).json({
+          ok: false,
+          mensaje: 'Proyecto no encontrado'
+        });
+      }
+
+      await ProyectoService.update(id, {
+        concurso_id: concursoId || existente.concurso_id,
+        nombre: nombre.trim(),
+        descripcion: descripcion || null,
+        estudiante_nombre: estudiante_nombre || existente.estudiante_nombre,
+        activo: activo !== undefined ? activo : existente.activo
+      });
+
+      const proyectoActualizado = await ProyectoService.getById(id);
 
       return res.json({
         ok: true,
-        mensaje: 'Evaluadores asignados'
+        mensaje: 'Proyecto actualizado correctamente',
+        data: proyectoActualizado
       });
 
-    } catch (err) {
-      console.error('❌ ERROR assign evaluadores:', err);
-
+    } catch (error) {
+      console.error('❌ ERROR UPDATE PROYECTO:', error);
       return res.status(500).json({
         ok: false,
-        mensaje: 'Error al asignar evaluadores'
+        mensaje: 'Error al actualizar proyecto: ' + error.message
+      });
+    }
+  },
+
+  async remove(req, res) {
+    try {
+      const id = parseInt(req.params.id);
+      console.log('📥 DELETE /proyectos/' + id);
+
+      // Verificar si existe
+      const existente = await ProyectoService.getById(id);
+      if (!existente) {
+        return res.status(404).json({
+          ok: false,
+          mensaje: 'Proyecto no encontrado'
+        });
+      }
+
+      await ProyectoService.delete(id);
+
+      return res.json({
+        ok: true,
+        mensaje: 'Proyecto eliminado correctamente'
+      });
+
+    } catch (error) {
+      console.error('❌ ERROR DELETE PROYECTO:', error);
+      return res.status(500).json({
+        ok: false,
+        mensaje: 'Error al eliminar proyecto: ' + error.message
       });
     }
   }
-
 };
 
 module.exports = proyectoController;
