@@ -2,6 +2,9 @@ const ProyectoService = require('../services/proyectoService');
 
 const proyectoController = {
 
+  // =========================
+  // GET ALL
+  // =========================
   async getAll(req, res) {
     try {
       console.log('📥 GET /proyectos');
@@ -16,11 +19,14 @@ const proyectoController = {
       console.error('❌ ERROR get proyectos:', error);
       return res.status(500).json({
         ok: false,
-        mensaje: 'Error al obtener proyectos'
+        mensaje: 'Error al obtener proyectos: ' + error.message
       });
     }
   },
 
+  // =========================
+  // GET BY ID
+  // =========================
   async getById(req, res) {
     try {
       const id = parseInt(req.params.id);
@@ -44,11 +50,14 @@ const proyectoController = {
       console.error('❌ ERROR get proyecto:', error);
       return res.status(500).json({
         ok: false,
-        mensaje: 'Error al obtener proyecto'
+        mensaje: 'Error al obtener proyecto: ' + error.message
       });
     }
   },
 
+  // =========================
+  // CREATE
+  // =========================
   async create(req, res) {
     try {
       console.log('==============================');
@@ -99,6 +108,9 @@ const proyectoController = {
     }
   },
 
+  // =========================
+  // UPDATE
+  // =========================
   async update(req, res) {
     try {
       const id = parseInt(req.params.id);
@@ -149,6 +161,9 @@ const proyectoController = {
     }
   },
 
+  // =========================
+  // DELETE
+  // =========================
   async remove(req, res) {
     try {
       const id = parseInt(req.params.id);
