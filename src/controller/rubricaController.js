@@ -52,16 +52,31 @@ class RubricaController {
   static async crear(req, res) {
     try {
       console.log('📥 POST /api/rubricas', req.body);
-      
-      // Validar que tenga concursoId
-      if (!req.body.concursoId) {
+
+      // Validar que tenga concurso_id
+      if (!req.body.concurso_id) {
         return res.status(400).json({
           ok: false,
           mensaje: 'El ID del concurso es obligatorio'
         });
       }
 
-      const rubrica = await RubricaService.crear(req.body);
+      // Validar que tenga nombre
+      if (!req.body.nombre) {
+        return res.status(400).json({
+          ok: false,
+          mensaje: 'El nombre de la rúbrica es obligatorio'
+        });
+      }
+
+      const rubrica = await RubricaService.crear({
+        concurso_id: req.body.concurso_id,
+        nombre: req.body.nombre,
+        descripcion: req.body.descripcion || null,
+        puntaje_maximo: req.body.puntaje_maximo || 100,
+        secciones: req.body.secciones || [],
+        niveles: req.body.niveles || []
+      });
 
       return res.status(201).json({
         ok: true,
@@ -83,7 +98,19 @@ class RubricaController {
       const id = parseInt(req.params.id);
       console.log('📥 PUT /api/rubricas/' + id, req.body);
 
-      const rubrica = await RubricaService.actualizar(id, req.body);
+      // Validar que tenga nombre
+      if (!req.body.nombre) {
+        return res.status(400).json({
+          ok: false,
+          mensaje: 'El nombre de la rúbrica es obligatorio'
+        });
+      }
+
+      const rubrica = await RubricaService.actualizar(id, {
+        nombre: req.body.nombre,
+        descripcion: req.body.descripcion || null,
+        puntaje_maximo: req.body.puntaje_maximo || 100
+      });
 
       return res.json({
         ok: true,

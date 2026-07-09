@@ -1,126 +1,220 @@
-const Concurso = require('../model/concursoModel');
-const Rubrica = require('../model/rubricaModel');
-const Nivel = require('../model/nivelModel');
-const Seccion = require('../model/seccionModel');
-const Criterio = require('../model/criterioModel');
+const db = require('../config/db');
 
-class RubricaService {
+const RubricaService = {
 
   static async listar() {
-    // Obtener todas las rúbricas
-    const rubricas = await Rubrica.getAll();
-    const resultado = [];
+    try {
+      // Obtener todas las rúbricas
+      const [rubricas] = await db.query(`
+        SELECT * FROM rubricas ORDER BY created_at DESC
+      `);
 
-    for (const rubrica of rubricas) {
-      // Obtener secciones del concurso
-      const secciones = await Seccion.getByConcurso(rubrica.concurso_id);
+      const resultado = [];
 
-      for (const seccion of secciones) {
-        // Obtener criterios de la sección
-        const criterios = await Criterio.getBySeccion(seccion.id);
-        
-        // Obtener niveles para cada criterio
-        for (const criterio of criterios) {
-          criterio.niveles = await Nivel.getByCriterio(criterio.id);
+      for (const rubrica of rubricas) {
+        // Obtener secciones del concurso
+        const [secciones] = await db.query(`
+          SELECT * FROM secciones WHERE concurso_id = ? ORDER BY orden ASC
+        `, [rubrica.concurso_id]);
+
+        // Obtener niveles del concurso
+        const [niveles] = await db.query(`
+          SELECT * FROM niveles WHERE concurso_id = ? ORDER BY puntaje ASC
+        `, [rubrica.concurso_id]);
+
+        // Obtener criterios para cada sección
+        for (const seccion of secciones) {
+          const [criterios] = await db.query(`
+            SELECT * FROM criterios WHERE seccion_id = ? ORDER BY orden ASC
+          `, [seccion.id]);
+          seccion.criterios = criterios;
         }
-        
+
+        resultado.push({
+          concursoId: rubrica.concurso_id,
+          secciones: secciones,
+          niveles: niveles
+        });
+      }
+
+      return resultado;
+
+    } catch (error) {
+      console.error('❌ ERROR listar rubricas:', error);
+      throw error;
+    }
+  },
+
+  static async obtener(concursoId) {
+    try {
+      // Buscar rúbrica por concurso_id
+      const [rubricas] = await db.query(`
+        SELECT * FROM rubricas WHERE concurso_id = ?
+      `, [concursoId]);
+
+      if (rubricas.length === 0) {
+        return null;
+      }
+
+      const rubrica = rubricas[0];
+
+      // Obtener secciones del concurso
+      const [secciones] = await db.query(`
+        SELECT * FROM secciones WHERE concurso_id = ? ORDER BY orden ASC
+      `, [concursoId]);
+
+      // Obtener niveles del concurso
+      const [niveles] = await db.query(`
+        SELECT * FROM niveles WHERE concurso_id = ? ORDER BY puntaje ASC
+      `, [concursoId]);
+
+      // Obtener criterios para cada sección
+      for (const seccion of secciones) {
+        const [criterios] = await db.query(`
+          SELECT * FROM criterios WHERE seccion_id = ? ORDER BY orden ASC
+        `, [seccion.id]);
         seccion.criterios = criterios;
       }
 
-      // Obtener niveles generales del concurso
-      const nivelesGenerales = await Nivel.getByConcurso(rubrica.concurso_id);
-
-      resultado.push({
+      return {
         concursoId: rubrica.concurso_id,
         secciones: secciones,
-        niveles: nivelesGenerales
-      });
+        niveles: niveles
+      };
+
+    } catch (error) {
+      console.error('❌ ERROR obtener rubrica:', error);
+      throw error;
     }
-
-    return resultado;
-  }
-
-  static async obtener(concursoId) {
-    // Buscar rúbrica por concurso_id
-    const rubrica = await Rubrica.getByConcurso(concursoId);
-    if (!rubrica) return null;
-
-    // Obtener secciones del concurso
-    const secciones = await Seccion.getByConcurso(concursoId);
-
-    for (const seccion of secciones) {
-      const criterios = await Criterio.getBySeccion(seccion.id);
-      
-      for (const criterio of criterios) {
-        criterio.niveles = await Nivel.getByCriterio(criterio.id);
-      }
-      
-      seccion.criterios = criterios;
-    }
-
-    const nivelesGenerales = await Nivel.getByConcurso(concursoId);
-
-    return {
-      concursoId: rubrica.concurso_id,
-      secciones: secciones,
-      niveles: nivelesGenerales
-    };
-  }
+  },
 
   static async crear(data) {
-    const { concursoId, nombre, descripcion, puntajeMaximo } = data;
-    
-    // Verificar si ya existe una rúbrica para este concurso
-    const existente = await Rubrica.getByConcurso(concursoId);
-    if (existente) {
-      throw new Error('Ya existe una rúbrica para este concurso');
+    try {
+      const { concurso_id, nombre, descripcion, puntaje_maximo, secciones, niveles } = data;
+
+      // Verificar si ya existe una rúbrica para este concurso
+      const [existentes] = await db.query(`
+        SELECT * FROM rubricas WHERE concurso_id = ?
+      `, [concurso_id]);
+
+      if (existentes.length > 0) {
+        throw new Error('Ya existe una rúbrica para este concurso');
+      }
+
+      // Crear la rúbrica
+      const [result] = await db.query(`
+        INSERT INTO rubricas (concurso_id, nombre, descripcion, puntaje_maximo, estado)
+        VALUES (?, ?, ?, ?, ?)
+      `, [concurso_id, nombre, descripcion || null, puntaje_maximo || 100, 'ACTIVA']);
+
+      // Si hay secciones, crearlas
+      if (secciones && secciones.length > 0) {
+        for (const seccion of secciones) {
+          const [seccionResult] = await db.query(`
+            INSERT INTO secciones (concurso_id, nombre, orden, descripcion)
+            VALUES (?, ?, ?, ?)
+          `, [concurso_id, seccion.nombre, seccion.orden || 0, seccion.descripcion || null]);
+
+          // Si hay criterios en la sección, crearlos
+          if (seccion.criterios && seccion.criterios.length > 0) {
+            for (const criterio of seccion.criterios) {
+              await db.query(`
+                INSERT INTO criterios (seccion_id, rubrica_id, texto, orden)
+                VALUES (?, ?, ?, ?)
+              `, [seccionResult.insertId, result.insertId, criterio.texto, criterio.orden || 0]);
+            }
+          }
+        }
+      }
+
+      // Si hay niveles, crearlos
+      if (niveles && niveles.length > 0) {
+        for (const nivel of niveles) {
+          await db.query(`
+            INSERT INTO niveles (concurso_id, nombre, puntaje, descripcion)
+            VALUES (?, ?, ?, ?)
+          `, [concurso_id, nivel.nombre, nivel.puntaje || 0, nivel.descripcion || null]);
+        }
+      }
+
+      return { id: result.insertId, concurso_id };
+
+    } catch (error) {
+      console.error('❌ ERROR crear rubrica:', error);
+      throw error;
     }
-
-    const rubricaId = await Rubrica.create({
-      concurso_id: concursoId,
-      nombre: nombre || `Rúbrica del concurso #${concursoId}`,
-      descripcion: descripcion || null,
-      puntaje_maximo: puntajeMaximo || 100
-    });
-
-    return { id: rubricaId, concursoId };
-  }
+  },
 
   static async actualizar(id, data) {
-    // id es el concursoId
-    const rubrica = await Rubrica.getByConcurso(id);
-    if (!rubrica) {
-      throw new Error('Rúbrica no encontrada');
+    try {
+      const { nombre, descripcion, puntaje_maximo } = data;
+
+      // Buscar la rúbrica por concurso_id
+      const [rubricas] = await db.query(`
+        SELECT * FROM rubricas WHERE concurso_id = ?
+      `, [id]);
+
+      if (rubricas.length === 0) {
+        throw new Error('Rúbrica no encontrada');
+      }
+
+      const rubrica = rubricas[0];
+
+      // Actualizar la rúbrica
+      await db.query(`
+        UPDATE rubricas 
+        SET nombre = ?, descripcion = ?, puntaje_maximo = ?
+        WHERE id = ?
+      `, [nombre, descripcion || null, puntaje_maximo || 100, rubrica.id]);
+
+      return { concurso_id: id };
+
+    } catch (error) {
+      console.error('❌ ERROR actualizar rubrica:', error);
+      throw error;
     }
-
-    await Rubrica.update(rubrica.id, {
-      nombre: data.nombre || rubrica.nombre,
-      descripcion: data.descripcion || rubrica.descripcion,
-      puntaje_maximo: data.puntajeMaximo || rubrica.puntaje_maximo
-    });
-
-    return { concursoId: id };
-  }
+  },
 
   static async eliminar(id) {
-    // id es el concursoId
-    const rubrica = await Rubrica.getByConcurso(id);
-    if (!rubrica) {
-      return false;
-    }
+    try {
+      // Buscar la rúbrica por concurso_id
+      const [rubricas] = await db.query(`
+        SELECT * FROM rubricas WHERE concurso_id = ?
+      `, [id]);
 
-    // Eliminar la rúbrica (ON DELETE CASCADE eliminará criterios asociados)
-    await Rubrica.delete(rubrica.id);
-    return true;
-  }
+      if (rubricas.length === 0) {
+        return false;
+      }
+
+      const rubrica = rubricas[0];
+
+      // Desactivar restricciones temporalmente
+      await db.query('SET FOREIGN_KEY_CHECKS = 0');
+
+      // Eliminar referencias en evaluaciones
+      await db.query('DELETE FROM evaluaciones WHERE rubrica_id = ?', [rubrica.id]);
+
+      // Eliminar la rúbrica
+      await db.query('DELETE FROM rubricas WHERE id = ?', [rubrica.id]);
+
+      // Reactivar restricciones
+      await db.query('SET FOREIGN_KEY_CHECKS = 1');
+
+      return true;
+
+    } catch (error) {
+      // Asegurar que se reactivan las restricciones
+      await db.query('SET FOREIGN_KEY_CHECKS = 1');
+      console.error('❌ ERROR eliminar rubrica:', error);
+      throw error;
+    }
+  },
 
   static async exportar(id) {
     const rubrica = await this.obtener(id);
     if (!rubrica) return null;
-    
-    // TODO: Implementar exportación a Excel
     return Buffer.from('Rúbrica exportada');
   }
-}
+};
 
 module.exports = RubricaService;
