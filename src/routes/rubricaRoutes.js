@@ -15,7 +15,7 @@ router.get(
 );
 
 // ==============================
-// OBTENER RÚBRICA POR CONCURSO ID
+// OBTENER RÚBRICA POR CONCURSO
 // ==============================
 router.get(
   '/:id',
@@ -35,7 +35,7 @@ router.post(
 );
 
 // ==============================
-// ACTUALIZAR RÚBRICA
+// ACTUALIZAR RÚBRICA - CORREGIDO
 // ==============================
 router.put(
   '/:id',

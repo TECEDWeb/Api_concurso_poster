@@ -16,10 +16,10 @@ const rubricaController = {
       });
 
     } catch (error) {
-      console.error('ERROR listar rubricas:', error);
+      console.error('❌ ERROR listar rubricas:', error);
       return res.status(500).json({
         ok: false,
-        mensaje: 'Error al listar rúbricas'
+        mensaje: 'Error al listar rúbricas: ' + error.message
       });
     }
   },
@@ -37,7 +37,7 @@ const rubricaController = {
       if (!rubrica) {
         return res.status(404).json({
           ok: false,
-          mensaje: 'Rúbrica no encontrada'
+          mensaje: 'Rúbrica no encontrada para este concurso'
         });
       }
 
@@ -47,16 +47,16 @@ const rubricaController = {
       });
 
     } catch (error) {
-      console.error('ERROR obtener rubrica:', error);
+      console.error('❌ ERROR obtener rubrica:', error);
       return res.status(500).json({
         ok: false,
-        mensaje: 'Error al obtener rúbrica'
+        mensaje: 'Error al obtener rúbrica: ' + error.message
       });
     }
   },
 
   // =========================
-  // CREAR RÚBRICA - CON LOGS
+  // CREAR RÚBRICA
   // =========================
   async crear(req, res) {
     try {
@@ -65,7 +65,6 @@ const rubricaController = {
 
       // Validar que tenga concurso_id
       if (!req.body.concurso_id) {
-        console.log('❌ Error: Falta concurso_id');
         return res.status(400).json({
           ok: false,
           mensaje: 'El ID del concurso es obligatorio'
@@ -73,43 +72,21 @@ const rubricaController = {
       }
 
       // Validar que tenga nombre
-      if (!req.body.nombre) {
-        console.log('❌ Error: Falta nombre');
+      if (!req.body.nombre || req.body.nombre.trim() === '') {
         return res.status(400).json({
           ok: false,
           mensaje: 'El nombre de la rúbrica es obligatorio'
         });
       }
 
-      // Validar que el nombre no esté vacío
-      if (req.body.nombre.trim() === '') {
-        console.log('❌ Error: Nombre vacío');
-        return res.status(400).json({
-          ok: false,
-          mensaje: 'El nombre de la rúbrica no puede estar vacío'
-        });
-      }
-
-      console.log('✅ Validaciones pasadas');
-      console.log('📤 Datos a enviar al servicio:', {
-        concurso_id: req.body.concurso_id,
-        nombre: req.body.nombre,
-        descripcion: req.body.descripcion || null,
-        puntaje_maximo: req.body.puntaje_maximo || 100,
-        secciones: req.body.secciones || [],
-        niveles: req.body.niveles || []
-      });
-
       const rubrica = await RubricaService.crear({
         concurso_id: req.body.concurso_id,
-        nombre: req.body.nombre,
+        nombre: req.body.nombre.trim(),
         descripcion: req.body.descripcion || null,
         puntaje_maximo: req.body.puntaje_maximo || 100,
         secciones: req.body.secciones || [],
         niveles: req.body.niveles || []
       });
-
-      console.log('✅ Rúbrica creada:', rubrica);
 
       return res.status(201).json({
         ok: true,
@@ -119,7 +96,6 @@ const rubricaController = {
 
     } catch (error) {
       console.error('❌ ERROR crear rubrica:', error);
-      console.error('❌ Stack trace:', error.stack);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al crear rúbrica: ' + error.message
@@ -128,7 +104,7 @@ const rubricaController = {
   },
 
   // =========================
-  // ACTUALIZAR RÚBRICA
+  // ACTUALIZAR RÚBRICA - CORREGIDO
   // =========================
   async actualizar(req, res) {
     try {
@@ -136,32 +112,27 @@ const rubricaController = {
       console.log('📥 PUT /api/rubricas/' + id);
       console.log('📦 BODY RECIBIDO:', JSON.stringify(req.body, null, 2));
 
+      // Verificar si el body está vacío
+      if (!req.body || Object.keys(req.body).length === 0) {
+        return res.status(400).json({
+          ok: false,
+          mensaje: 'El cuerpo de la solicitud está vacío'
+        });
+      }
+
       // Validar que tenga nombre
-      if (!req.body.nombre) {
-        console.log('❌ Error: Falta nombre');
+      if (!req.body.nombre || req.body.nombre.trim() === '') {
         return res.status(400).json({
           ok: false,
           mensaje: 'El nombre de la rúbrica es obligatorio'
         });
       }
 
-      if (req.body.nombre.trim() === '') {
-        console.log('❌ Error: Nombre vacío');
-        return res.status(400).json({
-          ok: false,
-          mensaje: 'El nombre de la rúbrica no puede estar vacío'
-        });
-      }
-
-      console.log('✅ Validaciones pasadas');
-
       const rubrica = await RubricaService.actualizar(id, {
-        nombre: req.body.nombre,
+        nombre: req.body.nombre.trim(),
         descripcion: req.body.descripcion || null,
         puntaje_maximo: req.body.puntaje_maximo || 100
       });
-
-      console.log('✅ Rúbrica actualizada:', rubrica);
 
       return res.json({
         ok: true,
@@ -171,7 +142,6 @@ const rubricaController = {
 
     } catch (error) {
       console.error('❌ ERROR actualizar rubrica:', error);
-      console.error('❌ Stack trace:', error.stack);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al actualizar rúbrica: ' + error.message
@@ -203,7 +173,6 @@ const rubricaController = {
 
     } catch (error) {
       console.error('❌ ERROR eliminar rubrica:', error);
-      console.error('❌ Stack trace:', error.stack);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al eliminar rúbrica: ' + error.message
@@ -234,10 +203,9 @@ const rubricaController = {
 
     } catch (error) {
       console.error('❌ ERROR exportar rubrica:', error);
-      console.error('❌ Stack trace:', error.stack);
       return res.status(500).json({
         ok: false,
-        mensaje: 'Error al exportar rúbrica'
+        mensaje: 'Error al exportar rúbrica: ' + error.message
       });
     }
   }
