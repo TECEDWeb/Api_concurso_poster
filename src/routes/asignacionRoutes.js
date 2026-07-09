@@ -11,6 +11,9 @@ router.get('/', auth, role('admin'), controller.listar);
 // Proyectos para el combo
 router.get('/proyectos', auth, role('admin'), controller.proyectos);
 
+// Evaluadores para el combo
+router.get('/evaluadores', auth, role('admin'), controller.evaluadores);
+
 // Crear asignación
 router.post('/', auth, role('admin'), controller.crear);
 

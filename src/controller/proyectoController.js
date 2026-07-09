@@ -56,7 +56,7 @@ const proyectoController = {
   },
 
   // =========================
-  // CREATE
+  // CREATE - CORREGIDO
   // =========================
   async create(req, res) {
     try {
@@ -77,6 +77,7 @@ const proyectoController = {
 
       // Validar que tenga estudiante_nombre
       if (!estudiante_nombre || estudiante_nombre.trim() === '') {
+        console.log('❌ Error: estudiante_nombre no proporcionado');
         return res.status(400).json({
           ok: false,
           mensaje: 'El nombre del estudiante es obligatorio'
@@ -88,8 +89,6 @@ const proyectoController = {
         nombre: nombre.trim(),
         descripcion: descripcion || null,
         estudiante_nombre: estudiante_nombre.trim(),
-        nivel: nivel || null,
-        area: area || null,
         activo: activo !== undefined ? activo : true
       });
 
@@ -109,7 +108,7 @@ const proyectoController = {
   },
 
   // =========================
-  // UPDATE
+  // UPDATE - CORREGIDO
   // =========================
   async update(req, res) {
     try {
