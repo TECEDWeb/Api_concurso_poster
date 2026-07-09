@@ -1,39 +1,44 @@
 const express = require('express');
-
 const router = express.Router();
-
 const controller = require('../controller/concursoController');
-
 const authMiddleware = require('../middleware/authMiddleware');
 const roleMiddleware = require('../middleware/roleMiddleware');
 
-router.use(authMiddleware);
-
+// LISTAR CONCURSOS (solo autenticación, sin roles específicos)
 router.get(
   '/',
+  authMiddleware,
   controller.listar
 );
 
+// OBTENER POR ID (solo autenticación)
 router.get(
   '/:id',
+  authMiddleware,
   controller.obtenerPorId
 );
 
+// CREAR CONCURSO (admin)
 router.post(
   '/',
-  roleMiddleware(['admin']),
+  authMiddleware,
+  roleMiddleware('admin'), // ← CORRECTO: pasar string, no array
   controller.crear
 );
 
+// ACTUALIZAR CONCURSO (admin)
 router.put(
   '/:id',
-  roleMiddleware(['admin']),
+  authMiddleware,
+  roleMiddleware('admin'), // ← CORRECTO: pasar string, no array
   controller.actualizar
 );
 
+// ELIMINAR CONCURSO (admin)
 router.delete(
   '/:id',
-  roleMiddleware(['admin']),
+  authMiddleware,
+  roleMiddleware('admin'), // ← CORRECTO: pasar string, no array
   controller.eliminar
 );
 
