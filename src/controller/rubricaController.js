@@ -1,8 +1,11 @@
 const RubricaService = require('../services/rubricaService');
 
-class RubricaController {
+const rubricaController = {
 
-  static async listar(req, res) {
+  // =========================
+  // LISTAR RÚBRICAS
+  // =========================
+  async listar(req, res) {
     try {
       console.log('📥 GET /api/rubricas');
       const rubricas = await RubricaService.listar();
@@ -19,9 +22,12 @@ class RubricaController {
         mensaje: 'Error al listar rúbricas'
       });
     }
-  }
+  },
 
-  static async obtener(req, res) {
+  // =========================
+  // OBTENER RÚBRICA POR CONCURSO
+  // =========================
+  async obtener(req, res) {
     try {
       const id = parseInt(req.params.id);
       console.log('📥 GET /api/rubricas/' + id);
@@ -47,9 +53,12 @@ class RubricaController {
         mensaje: 'Error al obtener rúbrica'
       });
     }
-  }
+  },
 
-  static async crear(req, res) {
+  // =========================
+  // CREAR RÚBRICA
+  // =========================
+  async crear(req, res) {
     try {
       console.log('📥 POST /api/rubricas', req.body);
 
@@ -91,9 +100,12 @@ class RubricaController {
         mensaje: 'Error al crear rúbrica: ' + error.message
       });
     }
-  }
+  },
 
-  static async actualizar(req, res) {
+  // =========================
+  // ACTUALIZAR RÚBRICA
+  // =========================
+  async actualizar(req, res) {
     try {
       const id = parseInt(req.params.id);
       console.log('📥 PUT /api/rubricas/' + id, req.body);
@@ -125,9 +137,12 @@ class RubricaController {
         mensaje: 'Error al actualizar rúbrica: ' + error.message
       });
     }
-  }
+  },
 
-  static async eliminar(req, res) {
+  // =========================
+  // ELIMINAR RÚBRICA
+  // =========================
+  async eliminar(req, res) {
     try {
       const id = parseInt(req.params.id);
       console.log('📥 DELETE /api/rubricas/' + id);
@@ -153,9 +168,12 @@ class RubricaController {
         mensaje: 'Error al eliminar rúbrica: ' + error.message
       });
     }
-  }
+  },
 
-  static async exportar(req, res) {
+  // =========================
+  // EXPORTAR RÚBRICA
+  // =========================
+  async exportar(req, res) {
     try {
       const id = parseInt(req.params.id);
       console.log('📥 GET /api/rubricas/' + id + '/exportar');
@@ -181,6 +199,6 @@ class RubricaController {
       });
     }
   }
-}
+};
 
-module.exports = RubricaController;
+module.exports = rubricaController;
