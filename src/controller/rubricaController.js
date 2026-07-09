@@ -56,14 +56,16 @@ const rubricaController = {
   },
 
   // =========================
-  // CREAR RÚBRICA
+  // CREAR RÚBRICA - CON LOGS
   // =========================
   async crear(req, res) {
     try {
-      console.log('📥 POST /api/rubricas', req.body);
+      console.log('📥 POST /api/rubricas');
+      console.log('📦 BODY RECIBIDO:', JSON.stringify(req.body, null, 2));
 
       // Validar que tenga concurso_id
       if (!req.body.concurso_id) {
+        console.log('❌ Error: Falta concurso_id');
         return res.status(400).json({
           ok: false,
           mensaje: 'El ID del concurso es obligatorio'
@@ -72,11 +74,31 @@ const rubricaController = {
 
       // Validar que tenga nombre
       if (!req.body.nombre) {
+        console.log('❌ Error: Falta nombre');
         return res.status(400).json({
           ok: false,
           mensaje: 'El nombre de la rúbrica es obligatorio'
         });
       }
+
+      // Validar que el nombre no esté vacío
+      if (req.body.nombre.trim() === '') {
+        console.log('❌ Error: Nombre vacío');
+        return res.status(400).json({
+          ok: false,
+          mensaje: 'El nombre de la rúbrica no puede estar vacío'
+        });
+      }
+
+      console.log('✅ Validaciones pasadas');
+      console.log('📤 Datos a enviar al servicio:', {
+        concurso_id: req.body.concurso_id,
+        nombre: req.body.nombre,
+        descripcion: req.body.descripcion || null,
+        puntaje_maximo: req.body.puntaje_maximo || 100,
+        secciones: req.body.secciones || [],
+        niveles: req.body.niveles || []
+      });
 
       const rubrica = await RubricaService.crear({
         concurso_id: req.body.concurso_id,
@@ -87,6 +109,8 @@ const rubricaController = {
         niveles: req.body.niveles || []
       });
 
+      console.log('✅ Rúbrica creada:', rubrica);
+
       return res.status(201).json({
         ok: true,
         mensaje: 'Rúbrica creada correctamente',
@@ -94,7 +118,8 @@ const rubricaController = {
       });
 
     } catch (error) {
-      console.error('ERROR crear rubrica:', error);
+      console.error('❌ ERROR crear rubrica:', error);
+      console.error('❌ Stack trace:', error.stack);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al crear rúbrica: ' + error.message
@@ -108,21 +133,35 @@ const rubricaController = {
   async actualizar(req, res) {
     try {
       const id = parseInt(req.params.id);
-      console.log('📥 PUT /api/rubricas/' + id, req.body);
+      console.log('📥 PUT /api/rubricas/' + id);
+      console.log('📦 BODY RECIBIDO:', JSON.stringify(req.body, null, 2));
 
       // Validar que tenga nombre
       if (!req.body.nombre) {
+        console.log('❌ Error: Falta nombre');
         return res.status(400).json({
           ok: false,
           mensaje: 'El nombre de la rúbrica es obligatorio'
         });
       }
 
+      if (req.body.nombre.trim() === '') {
+        console.log('❌ Error: Nombre vacío');
+        return res.status(400).json({
+          ok: false,
+          mensaje: 'El nombre de la rúbrica no puede estar vacío'
+        });
+      }
+
+      console.log('✅ Validaciones pasadas');
+
       const rubrica = await RubricaService.actualizar(id, {
         nombre: req.body.nombre,
         descripcion: req.body.descripcion || null,
         puntaje_maximo: req.body.puntaje_maximo || 100
       });
+
+      console.log('✅ Rúbrica actualizada:', rubrica);
 
       return res.json({
         ok: true,
@@ -131,7 +170,8 @@ const rubricaController = {
       });
 
     } catch (error) {
-      console.error('ERROR actualizar rubrica:', error);
+      console.error('❌ ERROR actualizar rubrica:', error);
+      console.error('❌ Stack trace:', error.stack);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al actualizar rúbrica: ' + error.message
@@ -162,7 +202,8 @@ const rubricaController = {
       });
 
     } catch (error) {
-      console.error('ERROR eliminar rubrica:', error);
+      console.error('❌ ERROR eliminar rubrica:', error);
+      console.error('❌ Stack trace:', error.stack);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al eliminar rúbrica: ' + error.message
@@ -192,7 +233,8 @@ const rubricaController = {
       res.send(excelBuffer);
 
     } catch (error) {
-      console.error('ERROR exportar rubrica:', error);
+      console.error('❌ ERROR exportar rubrica:', error);
+      console.error('❌ Stack trace:', error.stack);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al exportar rúbrica'

@@ -5,10 +5,14 @@ const db = require('../config/db');
 // =========================
 exports.listar = async function() {
   try {
+    console.log('📋 listar: Iniciando...');
+    
     // Obtener todas las rúbricas
     const [rubricas] = await db.query(`
       SELECT * FROM rubricas ORDER BY created_at DESC
     `);
+
+    console.log(`📋 listar: ${rubricas.length} rúbricas encontradas`);
 
     const resultado = [];
 
@@ -38,6 +42,7 @@ exports.listar = async function() {
       });
     }
 
+    console.log(`📋 listar: ${resultado.length} resultados procesados`);
     return resultado;
 
   } catch (error) {
@@ -51,16 +56,20 @@ exports.listar = async function() {
 // =========================
 exports.obtener = async function(concursoId) {
   try {
+    console.log(`🔍 obtener: Buscando rúbrica para concurso ${concursoId}`);
+    
     // Buscar rúbrica por concurso_id
     const [rubricas] = await db.query(`
       SELECT * FROM rubricas WHERE concurso_id = ?
     `, [concursoId]);
 
     if (rubricas.length === 0) {
+      console.log(`🔍 obtener: No se encontró rúbrica para concurso ${concursoId}`);
       return null;
     }
 
     const rubrica = rubricas[0];
+    console.log(`🔍 obtener: Rúbrica encontrada ID ${rubrica.id}`);
 
     // Obtener secciones del concurso
     const [secciones] = await db.query(`
@@ -93,11 +102,24 @@ exports.obtener = async function(concursoId) {
 };
 
 // =========================
-// CREAR RÚBRICA
+// CREAR RÚBRICA - CON LOGS
 // =========================
 exports.crear = async function(data) {
   try {
+    console.log('📝 crear: Iniciando creación de rúbrica');
+    console.log('📝 crear: Datos recibidos:', JSON.stringify(data, null, 2));
+
     const { concurso_id, nombre, descripcion, puntaje_maximo, secciones, niveles } = data;
+
+    // Validar que lleguen los datos necesarios
+    if (!concurso_id) {
+      throw new Error('concurso_id es obligatorio');
+    }
+    if (!nombre || nombre.trim() === '') {
+      throw new Error('nombre es obligatorio');
+    }
+
+    console.log(`📝 crear: Verificando existencia para concurso ${concurso_id}`);
 
     // Verificar si ya existe una rúbrica para este concurso
     const [existentes] = await db.query(`
@@ -105,8 +127,11 @@ exports.crear = async function(data) {
     `, [concurso_id]);
 
     if (existentes.length > 0) {
+      console.log(`❌ Ya existe una rúbrica para el concurso ${concurso_id}`);
       throw new Error('Ya existe una rúbrica para este concurso');
     }
+
+    console.log(`📝 crear: Insertando rúbrica para concurso ${concurso_id}`);
 
     // Crear la rúbrica
     const [result] = await db.query(`
@@ -114,8 +139,11 @@ exports.crear = async function(data) {
       VALUES (?, ?, ?, ?, ?)
     `, [concurso_id, nombre, descripcion || null, puntaje_maximo || 100, 'ACTIVA']);
 
+    console.log(`📝 crear: Rúbrica creada con ID ${result.insertId}`);
+
     // Si hay secciones, crearlas
     if (secciones && secciones.length > 0) {
+      console.log(`📝 crear: Creando ${secciones.length} secciones`);
       for (const seccion of secciones) {
         const [seccionResult] = await db.query(`
           INSERT INTO secciones (concurso_id, nombre, orden, descripcion)
@@ -136,6 +164,7 @@ exports.crear = async function(data) {
 
     // Si hay niveles, crearlos
     if (niveles && niveles.length > 0) {
+      console.log(`📝 crear: Creando ${niveles.length} niveles`);
       for (const nivel of niveles) {
         await db.query(`
           INSERT INTO niveles (concurso_id, nombre, puntaje, descripcion)
@@ -144,10 +173,12 @@ exports.crear = async function(data) {
       }
     }
 
+    console.log(`✅ Rúbrica creada exitosamente para concurso ${concurso_id}`);
     return { id: result.insertId, concurso_id };
 
   } catch (error) {
     console.error('❌ ERROR crear rubrica:', error);
+    console.error('❌ Stack trace:', error.stack);
     throw error;
   }
 };
@@ -157,6 +188,9 @@ exports.crear = async function(data) {
 // =========================
 exports.actualizar = async function(id, data) {
   try {
+    console.log(`📝 actualizar: Actualizando rúbrica para concurso ${id}`);
+    console.log('📝 actualizar: Datos:', JSON.stringify(data, null, 2));
+
     const { nombre, descripcion, puntaje_maximo } = data;
 
     // Buscar la rúbrica por concurso_id
@@ -165,10 +199,12 @@ exports.actualizar = async function(id, data) {
     `, [id]);
 
     if (rubricas.length === 0) {
+      console.log(`❌ No se encontró rúbrica para concurso ${id}`);
       throw new Error('Rúbrica no encontrada');
     }
 
     const rubrica = rubricas[0];
+    console.log(`📝 actualizar: Rúbrica encontrada ID ${rubrica.id}`);
 
     // Actualizar la rúbrica
     await db.query(`
@@ -177,10 +213,12 @@ exports.actualizar = async function(id, data) {
       WHERE id = ?
     `, [nombre, descripcion || null, puntaje_maximo || 100, rubrica.id]);
 
+    console.log(`✅ Rúbrica actualizada para concurso ${id}`);
     return { concurso_id: id };
 
   } catch (error) {
     console.error('❌ ERROR actualizar rubrica:', error);
+    console.error('❌ Stack trace:', error.stack);
     throw error;
   }
 };
@@ -190,16 +228,20 @@ exports.actualizar = async function(id, data) {
 // =========================
 exports.eliminar = async function(id) {
   try {
+    console.log(`🗑️ eliminar: Eliminando rúbrica para concurso ${id}`);
+    
     // Buscar la rúbrica por concurso_id
     const [rubricas] = await db.query(`
       SELECT * FROM rubricas WHERE concurso_id = ?
     `, [id]);
 
     if (rubricas.length === 0) {
+      console.log(`❌ No se encontró rúbrica para concurso ${id}`);
       return false;
     }
 
     const rubrica = rubricas[0];
+    console.log(`🗑️ eliminar: Rúbrica encontrada ID ${rubrica.id}`);
 
     // Desactivar restricciones temporalmente
     await db.query('SET FOREIGN_KEY_CHECKS = 0');
@@ -213,12 +255,14 @@ exports.eliminar = async function(id) {
     // Reactivar restricciones
     await db.query('SET FOREIGN_KEY_CHECKS = 1');
 
+    console.log(`✅ Rúbrica eliminada para concurso ${id}`);
     return true;
 
   } catch (error) {
     // Asegurar que se reactivan las restricciones
     await db.query('SET FOREIGN_KEY_CHECKS = 1');
     console.error('❌ ERROR eliminar rubrica:', error);
+    console.error('❌ Stack trace:', error.stack);
     throw error;
   }
 };
@@ -228,11 +272,17 @@ exports.eliminar = async function(id) {
 // =========================
 exports.exportar = async function(id) {
   try {
+    console.log(`📤 exportar: Exportando rúbrica para concurso ${id}`);
     const rubrica = await exports.obtener(id);
-    if (!rubrica) return null;
+    if (!rubrica) {
+      console.log(`❌ No se encontró rúbrica para concurso ${id}`);
+      return null;
+    }
+    console.log(`✅ Rúbrica exportada para concurso ${id}`);
     return Buffer.from('Rúbrica exportada');
   } catch (error) {
     console.error('❌ ERROR exportar rubrica:', error);
+    console.error('❌ Stack trace:', error.stack);
     throw error;
   }
 };
