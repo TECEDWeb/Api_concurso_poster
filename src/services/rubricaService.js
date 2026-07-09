@@ -12,29 +12,26 @@ class RubricaService {
     const resultado = [];
 
     for (const rubrica of rubricas) {
-      // Obtener secciones de la rúbrica (a través del concurso)
-      const secciones = await Seccion.obtenerPorConcurso(rubrica.concurso_id);
+      // Obtener secciones del concurso
+      const secciones = await Seccion.getByConcurso(rubrica.concurso_id);
 
       for (const seccion of secciones) {
-        const criterios = await Criterio.obtenerPorRubrica(rubrica.id);
+        // Obtener criterios de la sección
+        const criterios = await Criterio.getBySeccion(seccion.id);
         
+        // Obtener niveles para cada criterio
         for (const criterio of criterios) {
-          criterio.niveles = await Nivel.obtenerPorCriterio(criterio.id);
+          criterio.niveles = await Nivel.getByCriterio(criterio.id);
         }
         
         seccion.criterios = criterios;
       }
 
       // Obtener niveles generales del concurso
-      const nivelesGenerales = await Nivel.obtenerPorConcurso(rubrica.concurso_id);
+      const nivelesGenerales = await Nivel.getByConcurso(rubrica.concurso_id);
 
       resultado.push({
-        rubricaId: rubrica.id,
         concursoId: rubrica.concurso_id,
-        nombre: rubrica.nombre,
-        descripcion: rubrica.descripcion,
-        puntajeMaximo: rubrica.puntaje_maximo,
-        estado: rubrica.estado,
         secciones: secciones,
         niveles: nivelesGenerales
       });
@@ -44,62 +41,85 @@ class RubricaService {
   }
 
   static async obtener(concursoId) {
+    // Buscar rúbrica por concurso_id
     const rubrica = await Rubrica.getByConcurso(concursoId);
     if (!rubrica) return null;
 
-    const secciones = await Seccion.obtenerPorConcurso(concursoId);
+    // Obtener secciones del concurso
+    const secciones = await Seccion.getByConcurso(concursoId);
 
     for (const seccion of secciones) {
-      const criterios = await Criterio.obtenerPorRubrica(rubrica.id);
+      const criterios = await Criterio.getBySeccion(seccion.id);
       
       for (const criterio of criterios) {
-        criterio.niveles = await Nivel.obtenerPorCriterio(criterio.id);
+        criterio.niveles = await Nivel.getByCriterio(criterio.id);
       }
       
       seccion.criterios = criterios;
     }
 
-    const nivelesGenerales = await Nivel.obtenerPorConcurso(concursoId);
+    const nivelesGenerales = await Nivel.getByConcurso(concursoId);
 
     return {
-      rubricaId: rubrica.id,
       concursoId: rubrica.concurso_id,
-      nombre: rubrica.nombre,
-      descripcion: rubrica.descripcion,
-      puntajeMaximo: rubrica.puntaje_maximo,
-      estado: rubrica.estado,
       secciones: secciones,
       niveles: nivelesGenerales
     };
   }
 
   static async crear(data) {
-    const { concurso_id, nombre, descripcion, puntaje_maximo } = data;
+    const { concursoId, nombre, descripcion, puntajeMaximo } = data;
     
+    // Verificar si ya existe una rúbrica para este concurso
+    const existente = await Rubrica.getByConcurso(concursoId);
+    if (existente) {
+      throw new Error('Ya existe una rúbrica para este concurso');
+    }
+
     const rubricaId = await Rubrica.create({
-      concurso_id,
-      nombre,
-      descripcion,
-      puntaje_maximo
+      concurso_id: concursoId,
+      nombre: nombre || `Rúbrica del concurso #${concursoId}`,
+      descripcion: descripcion || null,
+      puntaje_maximo: puntajeMaximo || 100
     });
 
-    return { id: rubricaId };
+    return { id: rubricaId, concursoId };
   }
 
   static async actualizar(id, data) {
-    await Rubrica.update(id, data);
-    return { id, ...data };
+    // id es el concursoId
+    const rubrica = await Rubrica.getByConcurso(id);
+    if (!rubrica) {
+      throw new Error('Rúbrica no encontrada');
+    }
+
+    await Rubrica.update(rubrica.id, {
+      nombre: data.nombre || rubrica.nombre,
+      descripcion: data.descripcion || rubrica.descripcion,
+      puntaje_maximo: data.puntajeMaximo || rubrica.puntaje_maximo
+    });
+
+    return { concursoId: id };
   }
 
   static async eliminar(id) {
-    await Rubrica.delete(id);
+    // id es el concursoId
+    const rubrica = await Rubrica.getByConcurso(id);
+    if (!rubrica) {
+      return false;
+    }
+
+    // Eliminar la rúbrica (ON DELETE CASCADE eliminará criterios asociados)
+    await Rubrica.delete(rubrica.id);
     return true;
   }
 
   static async exportar(id) {
     const rubrica = await this.obtener(id);
     if (!rubrica) return null;
-    return Buffer.from('Rubrica exportada');
+    
+    // TODO: Implementar exportación a Excel
+    return Buffer.from('Rúbrica exportada');
   }
 }
 

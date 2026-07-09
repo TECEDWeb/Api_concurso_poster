@@ -2,9 +2,6 @@ const RubricaService = require('../services/rubricaService');
 
 class RubricaController {
 
-  // =========================
-  // LISTAR RÚBRICAS
-  // =========================
   static async listar(req, res) {
     try {
       console.log('📥 GET /api/rubricas');
@@ -24,15 +21,12 @@ class RubricaController {
     }
   }
 
-  // =========================
-  // OBTENER POR CONCURSO
-  // =========================
   static async obtener(req, res) {
     try {
-      const concursoId = parseInt(req.params.concursoId);
-      console.log('📥 GET /api/rubricas/' + concursoId);
+      const id = parseInt(req.params.id);
+      console.log('📥 GET /api/rubricas/' + id);
 
-      const rubrica = await RubricaService.obtener(concursoId);
+      const rubrica = await RubricaService.obtener(id);
 
       if (!rubrica) {
         return res.status(404).json({
@@ -55,16 +49,21 @@ class RubricaController {
     }
   }
 
-  // =========================
-  // CREAR RÚBRICA
-  // =========================
   static async crear(req, res) {
     try {
       console.log('📥 POST /api/rubricas', req.body);
       
+      // Validar que tenga concursoId
+      if (!req.body.concursoId) {
+        return res.status(400).json({
+          ok: false,
+          mensaje: 'El ID del concurso es obligatorio'
+        });
+      }
+
       const rubrica = await RubricaService.crear(req.body);
 
-      return res.json({
+      return res.status(201).json({
         ok: true,
         mensaje: 'Rúbrica creada correctamente',
         data: rubrica
@@ -74,27 +73,17 @@ class RubricaController {
       console.error('ERROR crear rubrica:', error);
       return res.status(500).json({
         ok: false,
-        mensaje: 'Error al crear rúbrica'
+        mensaje: 'Error al crear rúbrica: ' + error.message
       });
     }
   }
 
-  // =========================
-  // ACTUALIZAR RÚBRICA
-  // =========================
   static async actualizar(req, res) {
     try {
       const id = parseInt(req.params.id);
       console.log('📥 PUT /api/rubricas/' + id, req.body);
 
       const rubrica = await RubricaService.actualizar(id, req.body);
-
-      if (!rubrica) {
-        return res.status(404).json({
-          ok: false,
-          mensaje: 'Rúbrica no encontrada'
-        });
-      }
 
       return res.json({
         ok: true,
@@ -106,14 +95,11 @@ class RubricaController {
       console.error('ERROR actualizar rubrica:', error);
       return res.status(500).json({
         ok: false,
-        mensaje: 'Error al actualizar rúbrica'
+        mensaje: 'Error al actualizar rúbrica: ' + error.message
       });
     }
   }
 
-  // =========================
-  // ELIMINAR RÚBRICA
-  // =========================
   static async eliminar(req, res) {
     try {
       const id = parseInt(req.params.id);
@@ -137,14 +123,11 @@ class RubricaController {
       console.error('ERROR eliminar rubrica:', error);
       return res.status(500).json({
         ok: false,
-        mensaje: 'Error al eliminar rúbrica'
+        mensaje: 'Error al eliminar rúbrica: ' + error.message
       });
     }
   }
 
-  // =========================
-  // EXPORTAR RÚBRICA
-  // =========================
   static async exportar(req, res) {
     try {
       const id = parseInt(req.params.id);
@@ -160,7 +143,7 @@ class RubricaController {
       }
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', 'attachment; filename=rubrica-' + id + '.xlsx');
+      res.setHeader('Content-Disposition', 'attachment; filename=rubrica-concurso-' + id + '.xlsx');
       res.send(excelBuffer);
 
     } catch (error) {

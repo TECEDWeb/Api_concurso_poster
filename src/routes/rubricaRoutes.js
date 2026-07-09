@@ -15,10 +15,10 @@ router.get(
 );
 
 // ==============================
-// OBTENER RÚBRICA POR CONCURSO
+// OBTENER RÚBRICA POR CONCURSO ID
 // ==============================
 router.get(
-  '/:concursoId',
+  '/:id',
   authMiddleware,
   roleMiddleware('admin'),
   RubricaController.obtener
