@@ -1,35 +1,37 @@
 const express = require('express');
-
 const router = express.Router();
+const reporteController = require('../controller/reporteController');
+const authMiddleware = require('../middleware/authMiddleware');
+const roleMiddleware = require('../middleware/roleMiddleware');
 
-const controller =
-require('../controller/reporteController');
+// ==============================
+// ESTADÍSTICAS
+// ==============================
+router.get('/stats', authMiddleware, roleMiddleware('admin'), reporteController.stats);
 
+// ==============================
+// RANKING
+// ==============================
+router.get('/ranking', authMiddleware, roleMiddleware('admin'), reporteController.ranking);
 
+// ==============================
+// REPORTES POR PROYECTO
+// ==============================
+router.get('/proyectos', authMiddleware, roleMiddleware('admin'), reporteController.proyectos);
 
-router.get(
-  '/stats',
-  controller.stats
-);
+// ==============================
+// DETALLE DE PROYECTO (NUEVO)
+// ==============================
+router.get('/proyecto/:proyectoId', authMiddleware, roleMiddleware('admin'), reporteController.detalleProyecto);
 
+// ==============================
+// EXPORTAR EXCEL GENERAL
+// ==============================
+router.get('/exportar', authMiddleware, roleMiddleware('admin'), reporteController.exportar);
 
-router.get(
-  '/ranking',
-  controller.ranking
-);
-
-
-router.get(
-  '/proyectos',
-  controller.proyectos
-);
-
-
-router.get(
-  '/exportar',
-  controller.exportar
-);
-
-
+// ==============================
+// EXPORTAR EXCEL POR PROYECTO (NUEVO)
+// ==============================
+router.get('/exportar/proyecto/:proyectoId', authMiddleware, roleMiddleware('admin'), reporteController.exportarProyecto);
 
 module.exports = router;
