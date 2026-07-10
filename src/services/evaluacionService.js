@@ -4,65 +4,45 @@ const EvaluacionService = {
 
   
   async getFormularioByConcurso(concursoId) {
-      console.log("Buscando rúbrica para concurso:", concursoId);
-      const [rubricaRows] = await db.query(
-          `
-          SELECT *
-          FROM rubricas
-          WHERE concurso_id = ?
-          LIMIT 1
-          `,
-          [concursoId]
+    console.log("🔍 Buscando rúbrica para concurso:", concursoId);
+
+    const [rubricaRows] = await db.query(
+      `SELECT * FROM rubricas WHERE concurso_id = ? LIMIT 1`,
+      [concursoId]
+    );
+
+    if (!rubricaRows.length) {
+      return null;
+    }
+
+    const rubrica = rubricaRows[0];
+
+    const [secciones] = await db.query(
+      `SELECT * FROM secciones WHERE concurso_id = ? ORDER BY orden`,
+      [concursoId]
+    );
+
+    for (const sec of secciones) {
+      const [criterios] = await db.query(
+        `SELECT * FROM criterios WHERE seccion_id = ? ORDER BY orden`,
+        [sec.id]
       );
-      if (!rubricaRows.length) {
-          return null;
-      }
-      const rubrica = rubricaRows[0];
-      const [secciones] = await db.query(
-          `
-          SELECT *
-          FROM secciones
-          WHERE concurso_id = ?
-          ORDER BY orden
-          `,
-          [concursoId]
-      );
 
-      for (const sec of secciones) {
-
-          const [criterios] = await db.query(
-              `
-              SELECT *
-              FROM criterios
-              WHERE seccion_id = ?
-              ORDER BY orden
-              `,
-              [sec.id]
-          );
-
-          for (const criterio of criterios) {
-
-              const [niveles] = await db.query(
-                  `
-                  SELECT *
-                  FROM niveles
-                  WHERE criterio_id = ?
-                  ORDER BY puntaje DESC
-                  `,
-                  [criterio.id]
-              );
-
-              criterio.niveles = niveles;
-          }
-
-          sec.criterios = criterios;
+      for (const criterio of criterios) {
+        const [niveles] = await db.query(
+          `SELECT * FROM niveles WHERE criterio_id = ? ORDER BY puntaje DESC`,
+          [criterio.id]
+        );
+        criterio.niveles = niveles;
       }
 
-      return {
-          rubrica,
-          secciones
-      };
+      sec.criterios = criterios;
+    }
 
+    return {
+      rubrica,
+      secciones
+    };
   },
 
   /**
@@ -272,39 +252,34 @@ const EvaluacionService = {
 
   async getFormulario(evaluacionId) {
     try {
+      console.log("🔍 Buscando evaluación ID:", evaluacionId);
 
       const [rows] = await db.query(
         `SELECT 
-            e.id,
-            p.id AS proyecto_id,
-            p.concurso_id
+          e.id,
+          e.proyecto_id,
+          p.concurso_id,
+          p.nombre AS proyecto_nombre,
+          c.nombre AS concurso_nombre,
+          e.estado
         FROM evaluaciones e
         JOIN proyectos p ON e.proyecto_id = p.id
+        LEFT JOIN concursos c ON p.concurso_id = c.id
         WHERE e.id = ?`,
         [evaluacionId]
       );
 
-      console.log("Evaluación encontrada:", rows);
+      console.log("📊 Evaluación encontrada:", rows);
 
-      // 🔴 SI NO EXISTE → RESPUESTA CONTROLADA
       if (!rows || rows.length === 0) {
         return {
           ok: false,
-          mensaje: `No existe la evaluación ${evaluacionId}`,
-          data: null
+          mensaje: `No existe la evaluación ${evaluacionId}`
         };
       }
 
       const evaluacion = rows[0];
 
-      // 🔴 VALIDACIÓN EXTRA SEGURA
-      if (!evaluacion.concurso_id) {
-        return {
-          ok: false,
-          mensaje: 'La evaluación no tiene concurso asociado',
-          data: null
-        };
-      }
       if (evaluacion.estado === 'evaluado') {
         return {
           ok: false,
@@ -312,29 +287,51 @@ const EvaluacionService = {
         };
       }
 
-      // 🔵 FLUJO NORMAL (NO CAMBIA NADA)
+      if (!evaluacion.concurso_id) {
+        return {
+          ok: false,
+          mensaje: 'La evaluación no tiene concurso asociado'
+        };
+      }
+
+      // Obtener la rúbrica y secciones
       const formulario = await this.getFormularioByConcurso(evaluacion.concurso_id);
 
+      if (!formulario) {
+        return {
+          ok: false,
+          mensaje: 'No se encontró rúbrica para este concurso'
+        };
+      }
+
+      // Devolver la data en el formato esperado
       return {
         ok: true,
         data: {
           evaluacion_id: evaluacion.id,
           proyecto_id: evaluacion.proyecto_id,
-          ...formulario
+          proyecto: {
+            id: evaluacion.proyecto_id,
+            nombre: evaluacion.proyecto_nombre
+          },
+          concurso: {
+            id: evaluacion.concurso_id,
+            nombre: evaluacion.concurso_nombre || 'Sin concurso'
+          },
+          rubrica: formulario.rubrica,
+          secciones: formulario.secciones
         }
       };
 
     } catch (error) {
-
-      console.error('ERROR getFormulario:', error);
-
+      console.error('❌ ERROR getFormulario:', error);
       return {
         ok: false,
-        mensaje: 'Error interno al generar formulario',
-        data: null
+        mensaje: 'Error interno al generar formulario: ' + error.message
       };
     }
   },
+
 
   async asignarMasivo(proyectoId, evaluadores) {
   const connection = await db.getConnection();
