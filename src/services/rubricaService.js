@@ -202,15 +202,39 @@ const RubricaService = {
     }
   },
 
-  // =========================
   // EXPORTAR RÚBRICA
-  // =========================
   async exportar(id) {
     try {
       console.log(`📤 exportar: Exportando rúbrica para concurso ${id}`);
+      
+      // Obtener la rúbrica completa
       const rubrica = await this.obtener(id);
-      if (!rubrica) return null;
-      return Buffer.from('Rúbrica exportada');
+      if (!rubrica) {
+        throw new Error('Rúbrica no encontrada');
+      }
+      
+      // Crear un Excel simple (sin librerías externas)
+      // Esto es un ejemplo básico, idealmente usarías exceljs
+      const excelData = {
+        concursoId: rubrica.concursoId,
+        secciones: rubrica.secciones.map(s => ({
+          nombre: s.nombre,
+          descripcion: s.descripcion,
+          criterios: s.criterios.map(c => c.texto)
+        })),
+        niveles: rubrica.niveles.map(n => ({
+          nombre: n.nombre,
+          puntaje: n.puntaje,
+          descripcion: n.descripcion
+        }))
+      };
+      
+      // Convertir a CSV o JSON según necesites
+      const jsonString = JSON.stringify(excelData, null, 2);
+      
+      // Devolver como buffer
+      return Buffer.from(jsonString, 'utf-8');
+      
     } catch (error) {
       console.error('❌ ERROR exportar rubrica:', error);
       throw error;
