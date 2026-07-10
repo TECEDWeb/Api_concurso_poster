@@ -549,6 +549,7 @@ exports.exportarPDFProyecto = async (req, res) => {
     const proyectoId = parseInt(req.params.proyectoId);
     console.log(`📤 Exportando PDF para proyecto ID: ${proyectoId}`);
 
+    // Verificar que el proyecto existe
     const [proyectos] = await db.query(
       `SELECT id, nombre, descripcion FROM proyectos WHERE id = ?`,
       [proyectoId]
@@ -563,12 +564,14 @@ exports.exportarPDFProyecto = async (req, res) => {
 
     const proyecto = proyectos[0];
 
+    // Obtener evaluaciones del proyecto
     const [rows] = await db.query(`
       SELECT
         u.nombre AS evaluador,
         u.rol,
         ROUND(SUM(n.puntaje), 2) AS puntaje,
-        ROUND(AVG(n.puntaje), 2) AS promedio
+        ROUND(AVG(n.puntaje), 2) AS promedio,
+        COUNT(DISTINCT e.id) AS total_evaluaciones
       FROM evaluaciones e
       JOIN detalles_evaluacion d ON d.evaluacion_id = e.id
       JOIN niveles n ON n.id = d.nivel_id
@@ -578,10 +581,48 @@ exports.exportarPDFProyecto = async (req, res) => {
       ORDER BY puntaje DESC
     `, [proyectoId]);
 
-    const totalEvaluadores = rows.length;
-    const promedioGeneral = rows.reduce((sum, r) => sum + (r.promedio || 0), 0) / (rows.length || 1);
-    const puntajeTotal = rows.reduce((sum, r) => sum + (r.puntaje || 0), 0);
+    // Si no hay evaluaciones, generar un PDF con mensaje
+    if (rows.length === 0) {
+      // Crear PDF simple con mensaje
+      const fonts = {
+        Roboto: {
+          normal: 'Helvetica',
+          bold: 'Helvetica-Bold',
+          italics: 'Helvetica-Oblique',
+          bolditalics: 'Helvetica-BoldOblique'
+        }
+      };
+      const printer = new PdfPrinter(fonts);
 
+      const docDefinition = {
+        content: [
+          { text: `REPORTE DE EVALUACIÓN`, style: 'header' },
+          { text: `Proyecto: ${proyecto.nombre.toUpperCase()}`, style: 'subheader' },
+          { text: `Generado: ${new Date().toLocaleDateString('es-ES')}`, style: 'subheader' },
+          { text: '\n\n', alignment: 'center' },
+          { text: 'No hay evaluaciones registradas para este proyecto', alignment: 'center', fontSize: 14, color: '#64748b' }
+        ],
+        styles: {
+          header: { fontSize: 18, bold: true, alignment: 'center', color: '#003366' },
+          subheader: { fontSize: 12, alignment: 'center', color: '#64748b' }
+        },
+        pageMargins: [40, 60, 40, 60]
+      };
+
+      const pdfDoc = printer.createPdfKitDocument(docDefinition);
+      const chunks = [];
+      pdfDoc.on('data', chunk => chunks.push(chunk));
+      pdfDoc.on('end', () => {
+        const pdfBuffer = Buffer.concat(chunks);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename=reporte-${proyecto.nombre}-sin-evaluaciones.pdf`);
+        res.send(pdfBuffer);
+      });
+      pdfDoc.end();
+      return;
+    }
+
+    // Configurar pdfmake
     const fonts = {
       Roboto: {
         normal: 'Helvetica',
@@ -635,6 +676,11 @@ exports.exportarPDFProyecto = async (req, res) => {
         margin: [0, 20, 0, 0]
       }
     };
+
+    // Calcular estadísticas
+    const totalEvaluadores = rows.length;
+    const promedioGeneral = rows.reduce((sum, r) => sum + (r.promedio || 0), 0) / (rows.length || 1);
+    const puntajeTotal = rows.reduce((sum, r) => sum + (r.puntaje || 0), 0);
 
     const content = [];
 
