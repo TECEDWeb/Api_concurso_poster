@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const ExcelJS = require('exceljs');
+// CORRECCIÓN: Importar pdfmake correctamente
 const PdfPrinter = require('pdfmake');
 
 // =====================================
@@ -11,7 +12,6 @@ exports.stats = async (req, res) => {
     const [[evaluaciones]] = await db.query('SELECT COUNT(*) AS total FROM evaluaciones');
     const [[completadas]] = await db.query("SELECT COUNT(*) AS total FROM evaluaciones WHERE estado = 'evaluado'");
     
-    // Calcular promedio
     let promedio = 0;
     try {
       const [promedioResult] = await db.query(`
@@ -230,7 +230,6 @@ exports.exportarProyecto = async (req, res) => {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet(`Reporte ${proyecto.nombre}`);
 
-    // Título
     sheet.mergeCells('A1:D1');
     const titleCell = sheet.getCell('A1');
     titleCell.value = `REPORTE DE EVALUACIÓN - ${proyecto.nombre.toUpperCase()}`;
@@ -238,7 +237,6 @@ exports.exportarProyecto = async (req, res) => {
     titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
     sheet.getRow(1).height = 40;
 
-    // Encabezados
     const headerRow = sheet.getRow(3);
     headerRow.values = ['Evaluador', 'Rol', 'Puntaje', 'Promedio'];
     headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -375,7 +373,7 @@ exports.detalleProyecto = async (req, res) => {
 };
 
 // =====================================
-// EXPORTAR PDF GENERAL
+// EXPORTAR PDF GENERAL - CORREGIDO
 // =====================================
 exports.exportarPDF = async (req, res) => {
   try {
@@ -401,6 +399,7 @@ exports.exportarPDF = async (req, res) => {
     const totalEvaluadores = [...new Set(rows.map(r => r.evaluador))].length;
     const promedioGeneral = rows.reduce((sum, r) => sum + (r.promedio || 0), 0) / (rows.length || 1);
 
+    // Configurar pdfmake
     const fonts = {
       Roboto: {
         normal: 'Helvetica',
@@ -543,7 +542,7 @@ exports.exportarPDF = async (req, res) => {
 };
 
 // =====================================
-// EXPORTAR PDF POR PROYECTO
+// EXPORTAR PDF POR PROYECTO - CORREGIDO
 // =====================================
 exports.exportarPDFProyecto = async (req, res) => {
   try {
