@@ -20,7 +20,7 @@ router.get('/ranking', authMiddleware, roleMiddleware('admin'), reporteControlle
 router.get('/proyectos', authMiddleware, roleMiddleware('admin'), reporteController.proyectos);
 
 // ==============================
-// DETALLE DE PROYECTO (NUEVO)
+// DETALLE DE PROYECTO
 // ==============================
 router.get('/proyecto/:proyectoId', authMiddleware, roleMiddleware('admin'), reporteController.detalleProyecto);
 
@@ -30,8 +30,18 @@ router.get('/proyecto/:proyectoId', authMiddleware, roleMiddleware('admin'), rep
 router.get('/exportar', authMiddleware, roleMiddleware('admin'), reporteController.exportar);
 
 // ==============================
-// EXPORTAR EXCEL POR PROYECTO (NUEVO)
+// EXPORTAR EXCEL POR PROYECTO
 // ==============================
 router.get('/exportar/proyecto/:proyectoId', authMiddleware, roleMiddleware('admin'), reporteController.exportarProyecto);
+
+// ==============================
+// EXPORTAR PDF GENERAL
+// ==============================
+router.get('/exportar-pdf', authMiddleware, roleMiddleware('admin'), reporteController.exportarPDF);
+
+// ==============================
+// EXPORTAR PDF POR PROYECTO
+// ==============================
+router.get('/exportar-pdf/proyecto/:proyectoId', authMiddleware, roleMiddleware('admin'), reporteController.exportarPDFProyecto);
 
 module.exports = router;

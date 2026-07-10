@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const ExcelJS = require('exceljs');
+const PdfPrinter = require('pdfmake');
 
 // =====================================
 // STATS GENERALES
@@ -190,14 +191,13 @@ exports.exportar = async (req, res) => {
 };
 
 // =====================================
-// EXPORTAR REPORTE EXCEL POR PROYECTO (NUEVO)
+// EXPORTAR REPORTE EXCEL POR PROYECTO
 // =====================================
 exports.exportarProyecto = async (req, res) => {
   try {
     const proyectoId = parseInt(req.params.proyectoId);
     console.log(`📤 Exportando Excel para proyecto ID: ${proyectoId}`);
 
-    // Obtener datos del proyecto
     const [proyectos] = await db.query(
       `SELECT id, nombre FROM proyectos WHERE id = ?`,
       [proyectoId]
@@ -260,7 +260,6 @@ exports.exportarProyecto = async (req, res) => {
       rowIndex++;
     });
 
-    // Fila de totales
     if (rows.length > 0) {
       const totalRow = sheet.getRow(rowIndex);
       totalRow.values = ['TOTAL', '', 
@@ -288,14 +287,13 @@ exports.exportarProyecto = async (req, res) => {
 };
 
 // =====================================
-// DETALLE DE PROYECTO (NUEVO)
+// DETALLE DE PROYECTO
 // =====================================
 exports.detalleProyecto = async (req, res) => {
   try {
     const proyectoId = parseInt(req.params.proyectoId);
     console.log(`📋 Obteniendo detalle del proyecto ID: ${proyectoId}`);
 
-    // Obtener proyecto
     const [proyectos] = await db.query(
       `SELECT id, nombre, descripcion FROM proyectos WHERE id = ?`,
       [proyectoId]
@@ -310,7 +308,6 @@ exports.detalleProyecto = async (req, res) => {
 
     const proyecto = proyectos[0];
 
-    // Obtener evaluaciones del proyecto
     const [evaluaciones] = await db.query(`
       SELECT 
         e.id,
@@ -329,7 +326,6 @@ exports.detalleProyecto = async (req, res) => {
       ORDER BY e.fecha_evaluacion DESC
     `, [proyectoId]);
 
-    // Obtener evaluadores con puntajes
     const [evaluadores] = await db.query(`
       SELECT 
         u.nombre,
@@ -345,7 +341,6 @@ exports.detalleProyecto = async (req, res) => {
       ORDER BY puntaje DESC
     `, [proyectoId]);
 
-    // Calcular promedio general
     const [promedioResult] = await db.query(`
       SELECT ROUND(AVG(total_puntaje), 2) AS promedio FROM (
         SELECT SUM(n.puntaje) AS total_puntaje
@@ -375,6 +370,368 @@ exports.detalleProyecto = async (req, res) => {
     return res.status(500).json({
       ok: false,
       mensaje: 'Error obteniendo detalle del proyecto'
+    });
+  }
+};
+
+// =====================================
+// EXPORTAR PDF GENERAL
+// =====================================
+exports.exportarPDF = async (req, res) => {
+  try {
+    console.log('📤 Exportando PDF general de reportes');
+
+    const [rows] = await db.query(`
+      SELECT
+        p.nombre AS proyecto,
+        u.nombre AS evaluador,
+        u.rol,
+        ROUND(SUM(n.puntaje), 2) AS puntaje,
+        ROUND(AVG(n.puntaje), 2) AS promedio
+      FROM proyectos p
+      LEFT JOIN evaluaciones e ON e.proyecto_id = p.id
+      LEFT JOIN detalles_evaluacion d ON d.evaluacion_id = e.id
+      LEFT JOIN niveles n ON n.id = d.nivel_id
+      LEFT JOIN usuarios u ON u.id = e.evaluador_id
+      GROUP BY p.nombre, u.nombre, u.rol
+      ORDER BY p.nombre ASC
+    `);
+
+    const totalProyectos = rows.length;
+    const totalEvaluadores = [...new Set(rows.map(r => r.evaluador))].length;
+    const promedioGeneral = rows.reduce((sum, r) => sum + (r.promedio || 0), 0) / (rows.length || 1);
+
+    const fonts = {
+      Roboto: {
+        normal: 'Helvetica',
+        bold: 'Helvetica-Bold',
+        italics: 'Helvetica-Oblique',
+        bolditalics: 'Helvetica-BoldOblique'
+      }
+    };
+
+    const printer = new PdfPrinter(fonts);
+
+    const styles = {
+      header: {
+        fontSize: 18,
+        bold: true,
+        alignment: 'center',
+        color: '#003366',
+        margin: [0, 0, 0, 10]
+      },
+      subheader: {
+        fontSize: 12,
+        bold: true,
+        alignment: 'center',
+        color: '#64748b',
+        margin: [0, 0, 0, 20]
+      },
+      tableHeader: {
+        fontSize: 11,
+        bold: true,
+        fillColor: '#003366',
+        color: 'white',
+        alignment: 'center'
+      },
+      tableCell: {
+        fontSize: 10,
+        alignment: 'center'
+      },
+      stats: {
+        fontSize: 11,
+        margin: [0, 0, 0, 5]
+      },
+      footer: {
+        fontSize: 9,
+        alignment: 'center',
+        color: '#94a3b8',
+        margin: [0, 20, 0, 0]
+      }
+    };
+
+    const content = [];
+
+    content.push({ text: 'REPORTE DE EVALUACIONES', style: 'header' });
+    content.push({ text: `Generado: ${new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`, style: 'subheader' });
+
+    content.push({
+      text: [
+        { text: '📊 Resumen General\n\n', style: 'stats', bold: true },
+        { text: `Total de proyectos: ${totalProyectos}\n`, style: 'stats' },
+        { text: `Total de evaluadores: ${totalEvaluadores}\n`, style: 'stats' },
+        { text: `Promedio general: ${promedioGeneral.toFixed(2)} pts`, style: 'stats' }
+      ]
+    });
+
+    content.push({ text: '\n' });
+
+    if (rows.length > 0) {
+      const tableBody = [
+        [
+          { text: 'Proyecto', style: 'tableHeader' },
+          { text: 'Evaluador', style: 'tableHeader' },
+          { text: 'Rol', style: 'tableHeader' },
+          { text: 'Puntaje', style: 'tableHeader' },
+          { text: 'Promedio', style: 'tableHeader' }
+        ]
+      ];
+
+      rows.forEach(row => {
+        tableBody.push([
+          { text: row.proyecto || 'N/A', style: 'tableCell' },
+          { text: row.evaluador || 'N/A', style: 'tableCell' },
+          { text: row.rol || 'N/A', style: 'tableCell' },
+          { text: row.puntaje ? row.puntaje.toFixed(2) : '0.00', style: 'tableCell' },
+          { text: row.promedio ? row.promedio.toFixed(2) : '0.00', style: 'tableCell' }
+        ]);
+      });
+
+      content.push({
+        table: {
+          headerRows: 1,
+          widths: ['*', '*', 'auto', 'auto', 'auto'],
+          body: tableBody
+        },
+        layout: {
+          fillColor: function(rowIndex) {
+            return rowIndex % 2 === 0 ? '#f8fafc' : null;
+          },
+          hLineColor: function() { return '#e2e8f0'; },
+          vLineColor: function() { return '#e2e8f0'; },
+          paddingLeft: function() { return 8; },
+          paddingRight: function() { return 8; },
+          paddingTop: function() { return 6; },
+          paddingBottom: function() { return 6; }
+        }
+      });
+    }
+
+    content.push({
+      text: 'Sistema de Evaluación de Proyectos - Powered by UPSE',
+      style: 'footer'
+    });
+
+    const docDefinition = {
+      content: content,
+      styles: styles,
+      pageMargins: [40, 60, 40, 60],
+      defaultStyle: {
+        font: 'Roboto',
+        fontSize: 10
+      }
+    };
+
+    const pdfDoc = printer.createPdfKitDocument(docDefinition);
+    const chunks = [];
+    pdfDoc.on('data', chunk => chunks.push(chunk));
+    pdfDoc.on('end', () => {
+      const pdfBuffer = Buffer.concat(chunks);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename=reporte-evaluaciones-${new Date().toISOString().split('T')[0]}.pdf`);
+      res.send(pdfBuffer);
+    });
+    pdfDoc.end();
+
+  } catch (error) {
+    console.error('ERROR EXPORTAR PDF:', error);
+    return res.status(500).json({
+      ok: false,
+      mensaje: 'Error generando PDF: ' + error.message
+    });
+  }
+};
+
+// =====================================
+// EXPORTAR PDF POR PROYECTO
+// =====================================
+exports.exportarPDFProyecto = async (req, res) => {
+  try {
+    const proyectoId = parseInt(req.params.proyectoId);
+    console.log(`📤 Exportando PDF para proyecto ID: ${proyectoId}`);
+
+    const [proyectos] = await db.query(
+      `SELECT id, nombre, descripcion FROM proyectos WHERE id = ?`,
+      [proyectoId]
+    );
+
+    if (proyectos.length === 0) {
+      return res.status(404).json({
+        ok: false,
+        mensaje: 'Proyecto no encontrado'
+      });
+    }
+
+    const proyecto = proyectos[0];
+
+    const [rows] = await db.query(`
+      SELECT
+        u.nombre AS evaluador,
+        u.rol,
+        ROUND(SUM(n.puntaje), 2) AS puntaje,
+        ROUND(AVG(n.puntaje), 2) AS promedio
+      FROM evaluaciones e
+      JOIN detalles_evaluacion d ON d.evaluacion_id = e.id
+      JOIN niveles n ON n.id = d.nivel_id
+      JOIN usuarios u ON u.id = e.evaluador_id
+      WHERE e.proyecto_id = ?
+      GROUP BY u.id, u.nombre, u.rol
+      ORDER BY puntaje DESC
+    `, [proyectoId]);
+
+    const totalEvaluadores = rows.length;
+    const promedioGeneral = rows.reduce((sum, r) => sum + (r.promedio || 0), 0) / (rows.length || 1);
+    const puntajeTotal = rows.reduce((sum, r) => sum + (r.puntaje || 0), 0);
+
+    const fonts = {
+      Roboto: {
+        normal: 'Helvetica',
+        bold: 'Helvetica-Bold',
+        italics: 'Helvetica-Oblique',
+        bolditalics: 'Helvetica-BoldOblique'
+      }
+    };
+
+    const printer = new PdfPrinter(fonts);
+
+    const styles = {
+      header: {
+        fontSize: 18,
+        bold: true,
+        alignment: 'center',
+        color: '#003366',
+        margin: [0, 0, 0, 5]
+      },
+      subheader: {
+        fontSize: 12,
+        alignment: 'center',
+        color: '#64748b',
+        margin: [0, 0, 0, 20]
+      },
+      sectionTitle: {
+        fontSize: 14,
+        bold: true,
+        color: '#003366',
+        margin: [0, 15, 0, 8]
+      },
+      tableHeader: {
+        fontSize: 11,
+        bold: true,
+        fillColor: '#003366',
+        color: 'white',
+        alignment: 'center'
+      },
+      tableCell: {
+        fontSize: 10,
+        alignment: 'center'
+      },
+      stats: {
+        fontSize: 11,
+        margin: [0, 0, 0, 3]
+      },
+      footer: {
+        fontSize: 9,
+        alignment: 'center',
+        color: '#94a3b8',
+        margin: [0, 20, 0, 0]
+      }
+    };
+
+    const content = [];
+
+    content.push({ text: `REPORTE DE EVALUACIÓN`, style: 'header' });
+    content.push({ text: `Proyecto: ${proyecto.nombre.toUpperCase()}`, style: 'subheader' });
+    content.push({ text: `Generado: ${new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`, style: 'subheader' });
+
+    if (proyecto.descripcion) {
+      content.push({ text: `📝 Descripción: ${proyecto.descripcion}`, style: 'stats' });
+    }
+
+    content.push({ text: '\n' });
+
+    content.push({
+      text: [
+        { text: '📊 Estadísticas del Proyecto\n\n', style: 'sectionTitle' },
+        { text: `Total de evaluadores: ${totalEvaluadores}\n`, style: 'stats' },
+        { text: `Puntaje total: ${puntajeTotal.toFixed(2)} pts\n`, style: 'stats' },
+        { text: `Promedio general: ${promedioGeneral.toFixed(2)} pts`, style: 'stats' }
+      ]
+    });
+
+    content.push({ text: '\n' });
+
+    if (rows.length > 0) {
+      content.push({ text: '📋 Evaluadores', style: 'sectionTitle' });
+
+      const tableBody = [
+        [
+          { text: 'Evaluador', style: 'tableHeader' },
+          { text: 'Rol', style: 'tableHeader' },
+          { text: 'Puntaje', style: 'tableHeader' },
+          { text: 'Promedio', style: 'tableHeader' }
+        ]
+      ];
+
+      rows.forEach(row => {
+        tableBody.push([
+          { text: row.evaluador || 'N/A', style: 'tableCell' },
+          { text: row.rol || 'N/A', style: 'tableCell' },
+          { text: row.puntaje ? row.puntaje.toFixed(2) : '0.00', style: 'tableCell' },
+          { text: row.promedio ? row.promedio.toFixed(2) : '0.00', style: 'tableCell' }
+        ]);
+      });
+
+      content.push({
+        table: {
+          headerRows: 1,
+          widths: ['*', 'auto', 'auto', 'auto'],
+          body: tableBody
+        },
+        layout: {
+          fillColor: function(rowIndex) {
+            return rowIndex % 2 === 0 ? '#f8fafc' : null;
+          },
+          hLineColor: function() { return '#e2e8f0'; },
+          vLineColor: function() { return '#e2e8f0'; },
+          paddingLeft: function() { return 8; },
+          paddingRight: function() { return 8; },
+          paddingTop: function() { return 6; },
+          paddingBottom: function() { return 6; }
+        }
+      });
+    }
+
+    content.push({
+      text: 'Sistema de Evaluación de Proyectos - Powered by UPSE',
+      style: 'footer'
+    });
+
+    const docDefinition = {
+      content: content,
+      styles: styles,
+      pageMargins: [40, 60, 40, 60],
+      defaultStyle: {
+        font: 'Roboto',
+        fontSize: 10
+      }
+    };
+
+    const pdfDoc = printer.createPdfKitDocument(docDefinition);
+    const chunks = [];
+    pdfDoc.on('data', chunk => chunks.push(chunk));
+    pdfDoc.on('end', () => {
+      const pdfBuffer = Buffer.concat(chunks);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename=reporte-${proyecto.nombre}-${new Date().toISOString().split('T')[0]}.pdf`);
+      res.send(pdfBuffer);
+    });
+    pdfDoc.end();
+
+  } catch (error) {
+    console.error('ERROR EXPORTAR PDF PROYECTO:', error);
+    return res.status(500).json({
+      ok: false,
+      mensaje: 'Error generando PDF del proyecto: ' + error.message
     });
   }
 };
