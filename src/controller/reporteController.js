@@ -1,13 +1,7 @@
 const db = require('../config/db');
 const ExcelJS = require('exceljs');
-
-let PdfPrinter;
-try {
-  PdfPrinter = require('pdfmake/src/Printer');
-} catch (e) {
-  console.error('⚠️ No se pudo cargar pdfmake/src/Printer. La exportación a PDF estará deshabilitada:', e.message);
-  PdfPrinter = null;
-}
+const { jsPDF } = require('jspdf');
+require('jspdf-autotable');
 
 // Helper: fuerza a número cualquier valor que MySQL pueda devolver como string
 function num(valor) {
@@ -23,6 +17,110 @@ function nombreSeguro(nombre) {
     .replace(/[^a-zA-Z0-9\s-]/g, '')
     .trim()
     .replace(/\s+/g, '-');
+}
+
+// Colores institucionales UPSE en formato RGB (0-255) para jsPDF
+const COLOR_AZUL = [0, 51, 102];
+const COLOR_GRIS = [100, 116, 139];
+const COLOR_GRIS_CLARO = [248, 250, 252];
+const COLOR_BLANCO = [255, 255, 255];
+
+/**
+ * Genera un buffer PDF a partir de un título, subtítulo, líneas de
+ * estadísticas y una tabla, usando jsPDF (compatible con Node/CommonJS).
+ */
+function generarPdfBuffer({ titulo, subtitulo, descripcion, estadisticas, tablaTitulo, tablaHeaders, tablaFilas }) {
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  let y = 50;
+
+  // Título
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...COLOR_AZUL);
+  doc.text(titulo, pageWidth / 2, y, { align: 'center' });
+  y += 22;
+
+  // Subtítulo(s)
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...COLOR_GRIS);
+  if (subtitulo) {
+    doc.text(subtitulo, pageWidth / 2, y, { align: 'center' });
+    y += 16;
+  }
+  const fechaTexto = `Generado: ${new Date().toLocaleDateString('es-ES', {
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  })}`;
+  doc.text(fechaTexto, pageWidth / 2, y, { align: 'center' });
+  y += 24;
+
+  if (descripcion) {
+    doc.setFontSize(10);
+    doc.setTextColor(60, 60, 60);
+    const lineas = doc.splitTextToSize(`Descripcion: ${descripcion}`, pageWidth - 80);
+    doc.text(lineas, 40, y);
+    y += lineas.length * 12 + 10;
+  }
+
+  // Bloque de estadísticas
+  if (estadisticas && estadisticas.length) {
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...COLOR_AZUL);
+    doc.text('Resumen', 40, y);
+    y += 16;
+
+    doc.setFontSize(10.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(30, 30, 30);
+    estadisticas.forEach(linea => {
+      doc.text(linea, 40, y);
+      y += 14;
+    });
+    y += 10;
+  }
+
+  // Tabla
+  if (tablaFilas && tablaFilas.length) {
+    if (tablaTitulo) {
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...COLOR_AZUL);
+      doc.text(tablaTitulo, 40, y);
+      y += 10;
+    }
+
+    doc.autoTable({
+      startY: y + 6,
+      head: [tablaHeaders],
+      body: tablaFilas,
+      margin: { left: 40, right: 40 },
+      styles: { fontSize: 9.5, cellPadding: 6, halign: 'center' },
+      headStyles: { fillColor: COLOR_AZUL, textColor: COLOR_BLANCO, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: COLOR_GRIS_CLARO }
+    });
+
+    y = doc.lastAutoTable.finalY + 20;
+  } else {
+    doc.setFontSize(12);
+    doc.setTextColor(...COLOR_GRIS);
+    doc.text('No hay evaluaciones registradas para este proyecto', pageWidth / 2, y + 20, { align: 'center' });
+    y += 50;
+  }
+
+  // Footer
+  doc.setFontSize(9);
+  doc.setTextColor(...COLOR_GRIS);
+  doc.text(
+    'Sistema de Evaluacion de Proyectos - Powered by UPSE',
+    pageWidth / 2,
+    doc.internal.pageSize.getHeight() - 30,
+    { align: 'center' }
+  );
+
+  const arrayBuffer = doc.output('arraybuffer');
+  return Buffer.from(arrayBuffer);
 }
 
 // =====================================
@@ -474,13 +572,9 @@ exports.detalleEvaluacion = async (req, res) => {
 };
 
 // =====================================
-// EXPORTAR PDF GENERAL
+// EXPORTAR PDF GENERAL (con jsPDF)
 // =====================================
 exports.exportarPDF = async (req, res) => {
-  if (!PdfPrinter) {
-    return res.status(503).json({ ok: false, mensaje: 'La exportación a PDF no está disponible temporalmente' });
-  }
-
   try {
     const [rawRows] = await db.query(`
       SELECT
@@ -510,95 +604,26 @@ exports.exportarPDF = async (req, res) => {
     const totalEvaluadores = new Set(rows.map(r => r.evaluador)).size;
     const promedioGeneral = rows.reduce((sum, r) => sum + r.promedio, 0) / (rows.length || 1);
 
-    const fonts = {
-      Roboto: {
-        normal: 'Helvetica',
-        bold: 'Helvetica-Bold',
-        italics: 'Helvetica-Oblique',
-        bolditalics: 'Helvetica-BoldOblique'
-      }
-    };
-    const printer = new PdfPrinter(fonts);
-
-    const styles = {
-      header: { fontSize: 18, bold: true, alignment: 'center', color: '#003366', margin: [0, 0, 0, 10] },
-      subheader: { fontSize: 12, bold: true, alignment: 'center', color: '#64748b', margin: [0, 0, 0, 20] },
-      tableHeader: { fontSize: 11, bold: true, fillColor: '#003366', color: 'white', alignment: 'center' },
-      tableCell: { fontSize: 10, alignment: 'center' },
-      stats: { fontSize: 11, margin: [0, 0, 0, 5] },
-      footer: { fontSize: 9, alignment: 'center', color: '#94a3b8', margin: [0, 20, 0, 0] }
-    };
-
-    const content = [];
-    content.push({ text: 'REPORTE DE EVALUACIONES', style: 'header' });
-    content.push({
-      text: `Generado: ${new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`,
-      style: 'subheader'
+    const pdfBuffer = generarPdfBuffer({
+      titulo: 'REPORTE DE EVALUACIONES',
+      estadisticas: [
+        `Total de proyectos: ${totalProyectos}`,
+        `Total de evaluadores: ${totalEvaluadores}`,
+        `Promedio general: ${promedioGeneral.toFixed(2)} pts`
+      ],
+      tablaHeaders: ['Proyecto', 'Evaluador', 'Rol', 'Puntaje', 'Promedio'],
+      tablaFilas: rows.map(r => [
+        r.proyecto || 'N/A',
+        r.evaluador || 'N/A',
+        r.rol || 'N/A',
+        r.puntaje.toFixed(2),
+        r.promedio.toFixed(2)
+      ])
     });
 
-    content.push({
-      text: [
-        { text: '📊 Resumen General\n\n', style: 'stats', bold: true },
-        { text: `Total de proyectos: ${totalProyectos}\n`, style: 'stats' },
-        { text: `Total de evaluadores: ${totalEvaluadores}\n`, style: 'stats' },
-        { text: `Promedio general: ${promedioGeneral.toFixed(2)} pts`, style: 'stats' }
-      ]
-    });
-
-    content.push({ text: '\n' });
-
-    if (rows.length > 0) {
-      const tableBody = [[
-        { text: 'Proyecto', style: 'tableHeader' },
-        { text: 'Evaluador', style: 'tableHeader' },
-        { text: 'Rol', style: 'tableHeader' },
-        { text: 'Puntaje', style: 'tableHeader' },
-        { text: 'Promedio', style: 'tableHeader' }
-      ]];
-
-      rows.forEach(row => {
-        tableBody.push([
-          { text: row.proyecto || 'N/A', style: 'tableCell' },
-          { text: row.evaluador || 'N/A', style: 'tableCell' },
-          { text: row.rol || 'N/A', style: 'tableCell' },
-          { text: row.puntaje.toFixed(2), style: 'tableCell' },
-          { text: row.promedio.toFixed(2), style: 'tableCell' }
-        ]);
-      });
-
-      content.push({
-        table: { headerRows: 1, widths: ['*', '*', 'auto', 'auto', 'auto'], body: tableBody },
-        layout: {
-          fillColor: (rowIndex) => rowIndex % 2 === 0 ? '#f8fafc' : null,
-          hLineColor: () => '#e2e8f0',
-          vLineColor: () => '#e2e8f0',
-          paddingLeft: () => 8,
-          paddingRight: () => 8,
-          paddingTop: () => 6,
-          paddingBottom: () => 6
-        }
-      });
-    }
-
-    content.push({ text: 'Sistema de Evaluación de Proyectos - Powered by UPSE', style: 'footer' });
-
-    const docDefinition = {
-      content,
-      styles,
-      pageMargins: [40, 60, 40, 60],
-      defaultStyle: { font: 'Roboto', fontSize: 10 }
-    };
-
-    const pdfDoc = printer.createPdfKitDocument(docDefinition);
-    const chunks = [];
-    pdfDoc.on('data', chunk => chunks.push(chunk));
-    pdfDoc.on('end', () => {
-      const pdfBuffer = Buffer.concat(chunks);
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename=reporte-evaluaciones-${new Date().toISOString().split('T')[0]}.pdf`);
-      res.send(pdfBuffer);
-    });
-    pdfDoc.end();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=reporte-evaluaciones-${new Date().toISOString().split('T')[0]}.pdf`);
+    res.send(pdfBuffer);
 
   } catch (error) {
     console.error('ERROR EXPORTAR PDF:', error);
@@ -607,13 +632,9 @@ exports.exportarPDF = async (req, res) => {
 };
 
 // =====================================
-// EXPORTAR PDF POR PROYECTO
+// EXPORTAR PDF POR PROYECTO (con jsPDF)
 // =====================================
 exports.exportarPDFProyecto = async (req, res) => {
-  if (!PdfPrinter) {
-    return res.status(503).json({ ok: false, mensaje: 'La exportación a PDF no está disponible temporalmente' });
-  }
-
   try {
     const proyectoId = parseInt(req.params.proyectoId);
 
@@ -652,132 +673,38 @@ exports.exportarPDFProyecto = async (req, res) => {
       total_evaluaciones: num(r.total_evaluaciones)
     }));
 
-    const fonts = {
-      Roboto: {
-        normal: 'Helvetica',
-        bold: 'Helvetica-Bold',
-        italics: 'Helvetica-Oblique',
-        bolditalics: 'Helvetica-BoldOblique'
-      }
-    };
-    const printer = new PdfPrinter(fonts);
-
-    if (rows.length === 0) {
-      const docDefinition = {
-        content: [
-          { text: `REPORTE DE EVALUACIÓN`, style: 'header' },
-          { text: `Proyecto: ${proyecto.nombre.toUpperCase()}`, style: 'subheader' },
-          { text: `Generado: ${new Date().toLocaleDateString('es-ES')}`, style: 'subheader' },
-          { text: '\n\n', alignment: 'center' },
-          { text: 'No hay evaluaciones registradas para este proyecto', alignment: 'center', fontSize: 14, color: '#64748b' }
-        ],
-        styles: {
-          header: { fontSize: 18, bold: true, alignment: 'center', color: '#003366' },
-          subheader: { fontSize: 12, alignment: 'center', color: '#64748b' }
-        },
-        pageMargins: [40, 60, 40, 60]
-      };
-
-      const pdfDoc = printer.createPdfKitDocument(docDefinition);
-      const chunks = [];
-      pdfDoc.on('data', chunk => chunks.push(chunk));
-      pdfDoc.on('end', () => {
-        const pdfBuffer = Buffer.concat(chunks);
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename=reporte-${nombreSeguro(proyecto.nombre)}-sin-evaluaciones.pdf`);
-        res.send(pdfBuffer);
-      });
-      pdfDoc.end();
-      return;
-    }
-
-    const styles = {
-      header: { fontSize: 18, bold: true, alignment: 'center', color: '#003366', margin: [0, 0, 0, 5] },
-      subheader: { fontSize: 12, alignment: 'center', color: '#64748b', margin: [0, 0, 0, 20] },
-      sectionTitle: { fontSize: 14, bold: true, color: '#003366', margin: [0, 15, 0, 8] },
-      tableHeader: { fontSize: 11, bold: true, fillColor: '#003366', color: 'white', alignment: 'center' },
-      tableCell: { fontSize: 10, alignment: 'center' },
-      stats: { fontSize: 11, margin: [0, 0, 0, 3] },
-      footer: { fontSize: 9, alignment: 'center', color: '#94a3b8', margin: [0, 20, 0, 0] }
-    };
+    const nombreArchivo = rows.length === 0
+      ? `reporte-${nombreSeguro(proyecto.nombre)}-sin-evaluaciones.pdf`
+      : `reporte-${nombreSeguro(proyecto.nombre)}-${new Date().toISOString().split('T')[0]}.pdf`;
 
     const totalEvaluadores = rows.length;
-    const promedioGeneral = rows.reduce((sum, r) => sum + r.promedio, 0) / (rows.length || 1);
+    const promedioGeneral = rows.length
+      ? rows.reduce((sum, r) => sum + r.promedio, 0) / rows.length
+      : 0;
     const puntajeTotal = rows.reduce((sum, r) => sum + r.puntaje, 0);
 
-    const content = [];
-    content.push({ text: `REPORTE DE EVALUACIÓN`, style: 'header' });
-    content.push({ text: `Proyecto: ${proyecto.nombre.toUpperCase()}`, style: 'subheader' });
-    content.push({
-      text: `Generado: ${new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`,
-      style: 'subheader'
+    const pdfBuffer = generarPdfBuffer({
+      titulo: 'REPORTE DE EVALUACIÓN',
+      subtitulo: `Proyecto: ${proyecto.nombre.toUpperCase()}`,
+      descripcion: proyecto.descripcion || null,
+      estadisticas: rows.length ? [
+        `Total de evaluadores: ${totalEvaluadores}`,
+        `Puntaje total: ${puntajeTotal.toFixed(2)} pts`,
+        `Promedio general: ${promedioGeneral.toFixed(2)} pts`
+      ] : [],
+      tablaTitulo: rows.length ? 'Evaluadores' : null,
+      tablaHeaders: ['Evaluador', 'Rol', 'Puntaje', 'Promedio'],
+      tablaFilas: rows.map(r => [
+        r.evaluador || 'N/A',
+        r.rol || 'N/A',
+        r.puntaje.toFixed(2),
+        r.promedio.toFixed(2)
+      ])
     });
 
-    if (proyecto.descripcion) {
-      content.push({ text: `📝 Descripción: ${proyecto.descripcion}`, style: 'stats' });
-    }
-
-    content.push({ text: '\n' });
-    content.push({
-      text: [
-        { text: '📊 Estadísticas del Proyecto\n\n', style: 'sectionTitle' },
-        { text: `Total de evaluadores: ${totalEvaluadores}\n`, style: 'stats' },
-        { text: `Puntaje total: ${puntajeTotal.toFixed(2)} pts\n`, style: 'stats' },
-        { text: `Promedio general: ${promedioGeneral.toFixed(2)} pts`, style: 'stats' }
-      ]
-    });
-
-    content.push({ text: '\n' });
-    content.push({ text: '📋 Evaluadores', style: 'sectionTitle' });
-
-    const tableBody = [[
-      { text: 'Evaluador', style: 'tableHeader' },
-      { text: 'Rol', style: 'tableHeader' },
-      { text: 'Puntaje', style: 'tableHeader' },
-      { text: 'Promedio', style: 'tableHeader' }
-    ]];
-
-    rows.forEach(row => {
-      tableBody.push([
-        { text: row.evaluador || 'N/A', style: 'tableCell' },
-        { text: row.rol || 'N/A', style: 'tableCell' },
-        { text: row.puntaje.toFixed(2), style: 'tableCell' },
-        { text: row.promedio.toFixed(2), style: 'tableCell' }
-      ]);
-    });
-
-    content.push({
-      table: { headerRows: 1, widths: ['*', 'auto', 'auto', 'auto'], body: tableBody },
-      layout: {
-        fillColor: (rowIndex) => rowIndex % 2 === 0 ? '#f8fafc' : null,
-        hLineColor: () => '#e2e8f0',
-        vLineColor: () => '#e2e8f0',
-        paddingLeft: () => 8,
-        paddingRight: () => 8,
-        paddingTop: () => 6,
-        paddingBottom: () => 6
-      }
-    });
-
-    content.push({ text: 'Sistema de Evaluación de Proyectos - Powered by UPSE', style: 'footer' });
-
-    const docDefinition = {
-      content,
-      styles,
-      pageMargins: [40, 60, 40, 60],
-      defaultStyle: { font: 'Roboto', fontSize: 10 }
-    };
-
-    const pdfDoc = printer.createPdfKitDocument(docDefinition);
-    const chunks = [];
-    pdfDoc.on('data', chunk => chunks.push(chunk));
-    pdfDoc.on('end', () => {
-      const pdfBuffer = Buffer.concat(chunks);
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename=reporte-${nombreSeguro(proyecto.nombre)}-${new Date().toISOString().split('T')[0]}.pdf`);
-      res.send(pdfBuffer);
-    });
-    pdfDoc.end();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=${nombreArchivo}`);
+    res.send(pdfBuffer);
 
   } catch (error) {
     console.error('ERROR EXPORTAR PDF PROYECTO:', error);
