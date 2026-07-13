@@ -1,6 +1,13 @@
 const db = require('../config/db');
 const ExcelJS = require('exceljs');
-const PdfPrinter = require('pdfmake/src/printer');
+
+let PdfPrinter;
+try {
+  PdfPrinter = require('pdfmake/src/Printer');
+} catch (e) {
+  console.error('⚠️ No se pudo cargar pdfmake/src/Printer. La exportación a PDF estará deshabilitada:', e.message);
+  PdfPrinter = null;
+}
 
 // Helper: fuerza a número cualquier valor que MySQL pueda devolver como string
 function num(valor) {
@@ -8,15 +15,12 @@ function num(valor) {
 }
 
 // Helper: limpia un nombre de proyecto para usarlo de forma segura
-// en un header HTTP (Content-Disposition). Nombres con tildes, ñ u
-// otros caracteres no-ASCII rompen el header y provocan un 500
-// que no queda capturado por el try/catch de la función (porque
-// ocurre dentro del callback asíncrono de pdfDoc/workbook).
+// en un header HTTP (Content-Disposition).
 function nombreSeguro(nombre) {
   return (nombre || 'proyecto')
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // quita tildes/diacríticos
-    .replace(/[^a-zA-Z0-9\s-]/g, '') // quita cualquier otro carácter no seguro
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9\s-]/g, '')
     .trim()
     .replace(/\s+/g, '-');
 }
@@ -236,7 +240,6 @@ exports.exportarProyecto = async (req, res) => {
       ORDER BY puntaje DESC
     `, [proyectoId]);
 
-    // Normalizar a número desde el inicio evita el bug en todo lo que sigue
     const rows = rawRows.map(r => ({
       evaluador: r.evaluador,
       rol: r.rol,
@@ -301,7 +304,7 @@ exports.exportarProyecto = async (req, res) => {
 };
 
 // =====================================
-// DETALLE DE PROYECTO (resumen, sin desglose de criterios)
+// DETALLE DE PROYECTO
 // =====================================
 exports.detalleProyecto = async (req, res) => {
   try {
@@ -474,6 +477,10 @@ exports.detalleEvaluacion = async (req, res) => {
 // EXPORTAR PDF GENERAL
 // =====================================
 exports.exportarPDF = async (req, res) => {
+  if (!PdfPrinter) {
+    return res.status(503).json({ ok: false, mensaje: 'La exportación a PDF no está disponible temporalmente' });
+  }
+
   try {
     const [rawRows] = await db.query(`
       SELECT
@@ -603,6 +610,10 @@ exports.exportarPDF = async (req, res) => {
 // EXPORTAR PDF POR PROYECTO
 // =====================================
 exports.exportarPDFProyecto = async (req, res) => {
+  if (!PdfPrinter) {
+    return res.status(503).json({ ok: false, mensaje: 'La exportación a PDF no está disponible temporalmente' });
+  }
+
   try {
     const proyectoId = parseInt(req.params.proyectoId);
 
