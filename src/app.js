@@ -13,6 +13,9 @@ const reportesRoutes = require('./routes/reporteRoutes');
 const asignacionRoutes = require('./routes/asignacionRoutes');
 const rubricaRoutes = require('./routes/rubricaRoutes'); // ← AÑADIR ESTA LÍNEA
 const evaluadorRoutes = require('./routes/evaluadorRoutes');
+const seccionesRoutes = require('./routes/seccionRoutes');
+const criterioRoutes = require('./routes/criterioRoutes');
+const nivelRoutes = require('./routes/nivelRoutes');
 const app = express();
 
 // =========================
@@ -45,8 +48,12 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/concursos', concursoRoutes);
 app.use('/api/reportes', reportesRoutes);
 app.use('/api/asignaciones', asignacionRoutes);
-app.use('/api/rubricas', rubricaRoutes); // ← AÑADIR ESTA LÍNEA
+app.use('/api/rubricas', rubricaRoutes); 
 app.use('/api/evaluador', evaluadorRoutes);
+app.use('/api/secciones', seccionesRoutes);
+app.use('/api/criterios', criterioRoutes);
+app.use('/api/niveles', nivelRoutes);
+
 // =========================
 // HEALTH CHECK
 // =========================
