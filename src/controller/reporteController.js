@@ -7,6 +7,20 @@ function num(valor) {
   return Number(valor) || 0;
 }
 
+// Helper: limpia un nombre de proyecto para usarlo de forma segura
+// en un header HTTP (Content-Disposition). Nombres con tildes, ñ u
+// otros caracteres no-ASCII rompen el header y provocan un 500
+// que no queda capturado por el try/catch de la función (porque
+// ocurre dentro del callback asíncrono de pdfDoc/workbook).
+function nombreSeguro(nombre) {
+  return (nombre || 'proyecto')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // quita tildes/diacríticos
+    .replace(/[^a-zA-Z0-9\s-]/g, '') // quita cualquier otro carácter no seguro
+    .trim()
+    .replace(/\s+/g, '-');
+}
+
 // =====================================
 // STATS GENERALES
 // =====================================
@@ -275,7 +289,7 @@ exports.exportarProyecto = async (req, res) => {
     }
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename=reporte-${proyecto.nombre}.xlsx`);
+    res.setHeader('Content-Disposition', `attachment; filename=reporte-${nombreSeguro(proyecto.nombre)}.xlsx`);
 
     await workbook.xlsx.write(res);
     res.end();
@@ -383,8 +397,6 @@ exports.detalleProyecto = async (req, res) => {
 
 // =====================================
 // DETALLE COMPLETO: RESPUESTAS DE UN EVALUADOR EN UN PROYECTO
-// (NUEVO — esto es lo que te faltaba para ver las respuestas
-// de cada evaluador desde el admin, sección → criterio → nivel elegido)
 // =====================================
 exports.detalleEvaluacion = async (req, res) => {
   try {
@@ -661,7 +673,7 @@ exports.exportarPDFProyecto = async (req, res) => {
       pdfDoc.on('end', () => {
         const pdfBuffer = Buffer.concat(chunks);
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename=reporte-${proyecto.nombre}-sin-evaluaciones.pdf`);
+        res.setHeader('Content-Disposition', `attachment; filename=reporte-${nombreSeguro(proyecto.nombre)}-sin-evaluaciones.pdf`);
         res.send(pdfBuffer);
       });
       pdfDoc.end();
@@ -751,7 +763,7 @@ exports.exportarPDFProyecto = async (req, res) => {
     pdfDoc.on('end', () => {
       const pdfBuffer = Buffer.concat(chunks);
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename=reporte-${proyecto.nombre}-${new Date().toISOString().split('T')[0]}.pdf`);
+      res.setHeader('Content-Disposition', `attachment; filename=reporte-${nombreSeguro(proyecto.nombre)}-${new Date().toISOString().split('T')[0]}.pdf`);
       res.send(pdfBuffer);
     });
     pdfDoc.end();
