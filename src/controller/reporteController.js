@@ -1,6 +1,6 @@
 const db = require('../config/db');
 const ExcelJS = require('exceljs');
-const PdfPrinter = require('pdfmake');
+const PdfPrinter = require('pdfmake/src/printer');
 
 // Helper: fuerza a número cualquier valor que MySQL pueda devolver como string
 function num(valor) {
