@@ -1,7 +1,7 @@
 const db = require('../config/db');
 const ExcelJS = require('exceljs');
 const { jsPDF } = require('jspdf');
-require('jspdf-autotable');
+const autoTable = require('jspdf-autotable').default;
 
 // Helper: fuerza a número cualquier valor que MySQL pueda devolver como string
 function num(valor) {
@@ -91,7 +91,7 @@ function generarPdfBuffer({ titulo, subtitulo, descripcion, estadisticas, tablaT
       y += 10;
     }
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: y + 6,
       head: [tablaHeaders],
       body: tablaFilas,
