@@ -1,7 +1,11 @@
 const db = require('../config/db');
 const ExcelJS = require('exceljs');
-// CORRECCIÓN: Importar pdfmake correctamente
 const PdfPrinter = require('pdfmake');
+
+// Helper: fuerza a número cualquier valor que MySQL pueda devolver como string
+function num(valor) {
+  return Number(valor) || 0;
+}
 
 // =====================================
 // STATS GENERALES
@@ -11,7 +15,7 @@ exports.stats = async (req, res) => {
     const [[proyectos]] = await db.query('SELECT COUNT(*) AS total FROM proyectos');
     const [[evaluaciones]] = await db.query('SELECT COUNT(*) AS total FROM evaluaciones');
     const [[completadas]] = await db.query("SELECT COUNT(*) AS total FROM evaluaciones WHERE estado = 'evaluado'");
-    
+
     let promedio = 0;
     try {
       const [promedioResult] = await db.query(`
@@ -23,7 +27,7 @@ exports.stats = async (req, res) => {
           GROUP BY e.id
         ) AS puntajes
       `);
-      promedio = promedioResult[0].promedio || 0;
+      promedio = num(promedioResult[0].promedio);
     } catch (e) {
       promedio = 0;
     }
@@ -31,19 +35,16 @@ exports.stats = async (req, res) => {
     return res.json({
       ok: true,
       data: {
-        proyectos: proyectos.total || 0,
-        evaluaciones: evaluaciones.total || 0,
-        completadas: completadas.total || 0,
+        proyectos: num(proyectos.total),
+        evaluaciones: num(evaluaciones.total),
+        completadas: num(completadas.total),
         promedio: Math.round(promedio * 10) / 10
       }
     });
 
   } catch (error) {
     console.error('ERROR STATS:', error);
-    return res.status(500).json({
-      ok: false,
-      mensaje: 'Error obteniendo estadísticas'
-    });
+    return res.status(500).json({ ok: false, mensaje: 'Error obteniendo estadísticas' });
   }
 };
 
@@ -65,17 +66,17 @@ exports.ranking = async (req, res) => {
       ORDER BY promedio DESC
     `);
 
-    return res.json({
-      ok: true,
-      data: rows
-    });
+    const data = rows.map(r => ({
+      proyecto: r.proyecto,
+      puntaje_total: num(r.puntaje_total),
+      promedio: num(r.promedio)
+    }));
+
+    return res.json({ ok: true, data });
 
   } catch (error) {
     console.error('ERROR RANKING:', error);
-    return res.status(500).json({
-      ok: false,
-      mensaje: 'Error generando ranking'
-    });
+    return res.status(500).json({ ok: false, mensaje: 'Error generando ranking' });
   }
 };
 
@@ -109,8 +110,8 @@ exports.proyectos = async (req, res) => {
         proyecto = {
           id: row.id,
           proyecto: row.proyecto,
-          evaluaciones: row.evaluaciones,
-          promedio: row.promedio,
+          evaluaciones: num(row.evaluaciones),
+          promedio: num(row.promedio),
           evaluadores: []
         };
         proyectos.push(proyecto);
@@ -119,22 +120,16 @@ exports.proyectos = async (req, res) => {
         proyecto.evaluadores.push({
           nombre: row.evaluador,
           rol: row.rol,
-          puntaje: row.puntaje
+          puntaje: num(row.puntaje)
         });
       }
     });
 
-    return res.json({
-      ok: true,
-      data: proyectos
-    });
+    return res.json({ ok: true, data: proyectos });
 
   } catch (error) {
     console.error('ERROR REPORTES PROYECTOS:', error);
-    return res.status(500).json({
-      ok: false,
-      mensaje: 'Error obteniendo reportes'
-    });
+    return res.status(500).json({ ok: false, mensaje: 'Error obteniendo reportes' });
   }
 };
 
@@ -170,8 +165,14 @@ exports.exportar = async (req, res) => {
       { header: 'Promedio', key: 'promedio', width: 15 }
     ];
 
-    rows.forEach(row => sheet.addRow(row));
-    sheet.getRow(1).font = { bold: true };
+    rows.forEach(row => sheet.addRow({
+      proyecto: row.proyecto,
+      evaluador: row.evaluador,
+      rol: row.rol,
+      puntaje: num(row.puntaje),
+      promedio: num(row.promedio)
+    }));
+
     sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF003366' } };
     sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
 
@@ -183,10 +184,7 @@ exports.exportar = async (req, res) => {
 
   } catch (error) {
     console.error('ERROR EXPORTAR EXCEL:', error);
-    return res.status(500).json({
-      ok: false,
-      mensaje: 'Error generando Excel'
-    });
+    return res.status(500).json({ ok: false, mensaje: 'Error generando Excel' });
   }
 };
 
@@ -204,15 +202,12 @@ exports.exportarProyecto = async (req, res) => {
     );
 
     if (proyectos.length === 0) {
-      return res.status(404).json({
-        ok: false,
-        mensaje: 'Proyecto no encontrado'
-      });
+      return res.status(404).json({ ok: false, mensaje: 'Proyecto no encontrado' });
     }
 
     const proyecto = proyectos[0];
 
-    const [rows] = await db.query(`
+    const [rawRows] = await db.query(`
       SELECT
         u.nombre AS evaluador,
         u.rol,
@@ -226,6 +221,14 @@ exports.exportarProyecto = async (req, res) => {
       GROUP BY u.id, u.nombre, u.rol
       ORDER BY puntaje DESC
     `, [proyectoId]);
+
+    // Normalizar a número desde el inicio evita el bug en todo lo que sigue
+    const rows = rawRows.map(r => ({
+      evaluador: r.evaluador,
+      rol: r.rol,
+      puntaje: num(r.puntaje),
+      promedio: num(r.promedio)
+    }));
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet(`Reporte ${proyecto.nombre}`);
@@ -252,7 +255,7 @@ exports.exportarProyecto = async (req, res) => {
     let rowIndex = 4;
     rows.forEach(row => {
       const rowData = sheet.getRow(rowIndex);
-      rowData.values = [row.evaluador, row.rol, row.puntaje || 0, row.promedio || 0];
+      rowData.values = [row.evaluador, row.rol, row.puntaje, row.promedio];
       rowData.alignment = { vertical: 'middle' };
       rowData.height = 25;
       rowIndex++;
@@ -260,9 +263,11 @@ exports.exportarProyecto = async (req, res) => {
 
     if (rows.length > 0) {
       const totalRow = sheet.getRow(rowIndex);
-      totalRow.values = ['TOTAL', '', 
-        rows.reduce((sum, r) => sum + (r.puntaje || 0), 0).toFixed(2),
-        (rows.reduce((sum, r) => sum + (r.promedio || 0), 0) / rows.length).toFixed(2)
+      totalRow.values = [
+        'TOTAL',
+        '',
+        rows.reduce((sum, r) => sum + r.puntaje, 0).toFixed(2),
+        (rows.reduce((sum, r) => sum + r.promedio, 0) / rows.length).toFixed(2)
       ];
       totalRow.font = { bold: true };
       totalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F0FE' } };
@@ -277,20 +282,16 @@ exports.exportarProyecto = async (req, res) => {
 
   } catch (error) {
     console.error('ERROR EXPORTAR PROYECTO EXCEL:', error);
-    return res.status(500).json({
-      ok: false,
-      mensaje: 'Error generando Excel del proyecto'
-    });
+    return res.status(500).json({ ok: false, mensaje: 'Error generando Excel del proyecto' });
   }
 };
 
 // =====================================
-// DETALLE DE PROYECTO
+// DETALLE DE PROYECTO (resumen, sin desglose de criterios)
 // =====================================
 exports.detalleProyecto = async (req, res) => {
   try {
     const proyectoId = parseInt(req.params.proyectoId);
-    console.log(`📋 Obteniendo detalle del proyecto ID: ${proyectoId}`);
 
     const [proyectos] = await db.query(
       `SELECT id, nombre, descripcion FROM proyectos WHERE id = ?`,
@@ -298,15 +299,12 @@ exports.detalleProyecto = async (req, res) => {
     );
 
     if (proyectos.length === 0) {
-      return res.status(404).json({
-        ok: false,
-        mensaje: 'Proyecto no encontrado'
-      });
+      return res.status(404).json({ ok: false, mensaje: 'Proyecto no encontrado' });
     }
 
     const proyecto = proyectos[0];
 
-    const [evaluaciones] = await db.query(`
+    const [evaluacionesRaw] = await db.query(`
       SELECT 
         e.id,
         u.nombre AS evaluador,
@@ -324,8 +322,14 @@ exports.detalleProyecto = async (req, res) => {
       ORDER BY e.fecha_evaluacion DESC
     `, [proyectoId]);
 
-    const [evaluadores] = await db.query(`
+    const evaluaciones = evaluacionesRaw.map(e => ({
+      ...e,
+      puntaje_total: num(e.puntaje_total)
+    }));
+
+    const [evaluadoresRaw] = await db.query(`
       SELECT 
+        u.id AS evaluador_id,
         u.nombre,
         u.rol,
         ROUND(SUM(n.puntaje), 2) AS puntaje,
@@ -338,6 +342,14 @@ exports.detalleProyecto = async (req, res) => {
       GROUP BY u.id, u.nombre, u.rol
       ORDER BY puntaje DESC
     `, [proyectoId]);
+
+    const evaluadores = evaluadoresRaw.map(e => ({
+      evaluadorId: e.evaluador_id,
+      nombre: e.nombre,
+      rol: e.rol,
+      puntaje: num(e.puntaje),
+      promedio: num(e.promedio)
+    }));
 
     const [promedioResult] = await db.query(`
       SELECT ROUND(AVG(total_puntaje), 2) AS promedio FROM (
@@ -356,30 +368,102 @@ exports.detalleProyecto = async (req, res) => {
         id: proyecto.id,
         nombre: proyecto.nombre,
         descripcion: proyecto.descripcion || '',
-        evaluaciones: evaluaciones,
-        evaluadores: evaluadores,
-        promedio: promedioResult[0]?.promedio || 0,
+        evaluaciones,
+        evaluadores,
+        promedio: num(promedioResult[0]?.promedio),
         totalEvaluaciones: evaluaciones.length
       }
     });
 
   } catch (error) {
     console.error('ERROR DETALLE PROYECTO:', error);
-    return res.status(500).json({
-      ok: false,
-      mensaje: 'Error obteniendo detalle del proyecto'
-    });
+    return res.status(500).json({ ok: false, mensaje: 'Error obteniendo detalle del proyecto' });
   }
 };
 
 // =====================================
-// EXPORTAR PDF GENERAL - CORREGIDO
+// DETALLE COMPLETO: RESPUESTAS DE UN EVALUADOR EN UN PROYECTO
+// (NUEVO — esto es lo que te faltaba para ver las respuestas
+// de cada evaluador desde el admin, sección → criterio → nivel elegido)
+// =====================================
+exports.detalleEvaluacion = async (req, res) => {
+  try {
+    const evaluacionId = parseInt(req.params.evaluacionId);
+
+    const [cabecera] = await db.query(`
+      SELECT 
+        e.id,
+        e.estado,
+        e.observaciones,
+        e.fecha_evaluacion,
+        p.nombre AS proyectoNombre,
+        c.nombre AS concursoNombre,
+        u.nombre AS evaluadorNombre,
+        u.rol AS evaluadorRol,
+        r.nombre AS rubricaNombre,
+        r.puntaje_maximo AS puntajeMaximo
+      FROM evaluaciones e
+      JOIN proyectos p ON p.id = e.proyecto_id
+      LEFT JOIN concursos c ON c.id = p.concurso_id
+      JOIN usuarios u ON u.id = e.evaluador_id
+      JOIN rubricas r ON r.concurso_id = p.concurso_id
+      WHERE e.id = ?
+    `, [evaluacionId]);
+
+    if (cabecera.length === 0) {
+      return res.status(404).json({ ok: false, mensaje: 'Evaluación no encontrada' });
+    }
+
+    const info = cabecera[0];
+
+    const [detallesRaw] = await db.query(`
+      SELECT 
+        s.nombre AS seccion,
+        cr.texto AS criterio,
+        n.nombre AS nivel,
+        n.puntaje AS puntaje
+      FROM detalles_evaluacion d
+      JOIN criterios cr ON cr.id = d.criterio_id
+      JOIN secciones s ON s.id = cr.seccion_id
+      JOIN niveles n ON n.id = d.nivel_id
+      WHERE d.evaluacion_id = ?
+      ORDER BY s.orden, cr.orden
+    `, [evaluacionId]);
+
+    const detalles = detallesRaw.map(d => ({
+      ...d,
+      puntaje: num(d.puntaje)
+    }));
+
+    return res.json({
+      ok: true,
+      data: {
+        id: info.id,
+        estado: info.estado,
+        observaciones: info.observaciones,
+        fecha: info.fecha_evaluacion,
+        proyectoNombre: info.proyectoNombre,
+        concursoNombre: info.concursoNombre,
+        evaluadorNombre: info.evaluadorNombre,
+        evaluadorRol: info.evaluadorRol,
+        rubricaNombre: info.rubricaNombre,
+        puntajeMaximo: num(info.puntajeMaximo),
+        detalles
+      }
+    });
+
+  } catch (error) {
+    console.error('ERROR DETALLE EVALUACION:', error);
+    return res.status(500).json({ ok: false, mensaje: 'Error obteniendo detalle de la evaluación' });
+  }
+};
+
+// =====================================
+// EXPORTAR PDF GENERAL
 // =====================================
 exports.exportarPDF = async (req, res) => {
   try {
-    console.log('📤 Exportando PDF general de reportes');
-
-    const [rows] = await db.query(`
+    const [rawRows] = await db.query(`
       SELECT
         p.nombre AS proyecto,
         u.nombre AS evaluador,
@@ -395,11 +479,18 @@ exports.exportarPDF = async (req, res) => {
       ORDER BY p.nombre ASC
     `);
 
-    const totalProyectos = rows.length;
-    const totalEvaluadores = [...new Set(rows.map(r => r.evaluador))].length;
-    const promedioGeneral = rows.reduce((sum, r) => sum + (r.promedio || 0), 0) / (rows.length || 1);
+    const rows = rawRows.map(r => ({
+      proyecto: r.proyecto,
+      evaluador: r.evaluador,
+      rol: r.rol,
+      puntaje: num(r.puntaje),
+      promedio: num(r.promedio)
+    }));
 
-    // Configurar pdfmake
+    const totalProyectos = new Set(rows.map(r => r.proyecto)).size;
+    const totalEvaluadores = new Set(rows.map(r => r.evaluador)).size;
+    const promedioGeneral = rows.reduce((sum, r) => sum + r.promedio, 0) / (rows.length || 1);
+
     const fonts = {
       Roboto: {
         normal: 'Helvetica',
@@ -408,51 +499,23 @@ exports.exportarPDF = async (req, res) => {
         bolditalics: 'Helvetica-BoldOblique'
       }
     };
-
     const printer = new PdfPrinter(fonts);
 
     const styles = {
-      header: {
-        fontSize: 18,
-        bold: true,
-        alignment: 'center',
-        color: '#003366',
-        margin: [0, 0, 0, 10]
-      },
-      subheader: {
-        fontSize: 12,
-        bold: true,
-        alignment: 'center',
-        color: '#64748b',
-        margin: [0, 0, 0, 20]
-      },
-      tableHeader: {
-        fontSize: 11,
-        bold: true,
-        fillColor: '#003366',
-        color: 'white',
-        alignment: 'center'
-      },
-      tableCell: {
-        fontSize: 10,
-        alignment: 'center'
-      },
-      stats: {
-        fontSize: 11,
-        margin: [0, 0, 0, 5]
-      },
-      footer: {
-        fontSize: 9,
-        alignment: 'center',
-        color: '#94a3b8',
-        margin: [0, 20, 0, 0]
-      }
+      header: { fontSize: 18, bold: true, alignment: 'center', color: '#003366', margin: [0, 0, 0, 10] },
+      subheader: { fontSize: 12, bold: true, alignment: 'center', color: '#64748b', margin: [0, 0, 0, 20] },
+      tableHeader: { fontSize: 11, bold: true, fillColor: '#003366', color: 'white', alignment: 'center' },
+      tableCell: { fontSize: 10, alignment: 'center' },
+      stats: { fontSize: 11, margin: [0, 0, 0, 5] },
+      footer: { fontSize: 9, alignment: 'center', color: '#94a3b8', margin: [0, 20, 0, 0] }
     };
 
     const content = [];
-
     content.push({ text: 'REPORTE DE EVALUACIONES', style: 'header' });
-    content.push({ text: `Generado: ${new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`, style: 'subheader' });
+    content.push({
+      text: `Generado: ${new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`,
+      style: 'subheader'
+    });
 
     content.push({
       text: [
@@ -466,59 +529,45 @@ exports.exportarPDF = async (req, res) => {
     content.push({ text: '\n' });
 
     if (rows.length > 0) {
-      const tableBody = [
-        [
-          { text: 'Proyecto', style: 'tableHeader' },
-          { text: 'Evaluador', style: 'tableHeader' },
-          { text: 'Rol', style: 'tableHeader' },
-          { text: 'Puntaje', style: 'tableHeader' },
-          { text: 'Promedio', style: 'tableHeader' }
-        ]
-      ];
+      const tableBody = [[
+        { text: 'Proyecto', style: 'tableHeader' },
+        { text: 'Evaluador', style: 'tableHeader' },
+        { text: 'Rol', style: 'tableHeader' },
+        { text: 'Puntaje', style: 'tableHeader' },
+        { text: 'Promedio', style: 'tableHeader' }
+      ]];
 
       rows.forEach(row => {
         tableBody.push([
           { text: row.proyecto || 'N/A', style: 'tableCell' },
           { text: row.evaluador || 'N/A', style: 'tableCell' },
           { text: row.rol || 'N/A', style: 'tableCell' },
-          { text: row.puntaje ? row.puntaje.toFixed(2) : '0.00', style: 'tableCell' },
-          { text: row.promedio ? row.promedio.toFixed(2) : '0.00', style: 'tableCell' }
+          { text: row.puntaje.toFixed(2), style: 'tableCell' },
+          { text: row.promedio.toFixed(2), style: 'tableCell' }
         ]);
       });
 
       content.push({
-        table: {
-          headerRows: 1,
-          widths: ['*', '*', 'auto', 'auto', 'auto'],
-          body: tableBody
-        },
+        table: { headerRows: 1, widths: ['*', '*', 'auto', 'auto', 'auto'], body: tableBody },
         layout: {
-          fillColor: function(rowIndex) {
-            return rowIndex % 2 === 0 ? '#f8fafc' : null;
-          },
-          hLineColor: function() { return '#e2e8f0'; },
-          vLineColor: function() { return '#e2e8f0'; },
-          paddingLeft: function() { return 8; },
-          paddingRight: function() { return 8; },
-          paddingTop: function() { return 6; },
-          paddingBottom: function() { return 6; }
+          fillColor: (rowIndex) => rowIndex % 2 === 0 ? '#f8fafc' : null,
+          hLineColor: () => '#e2e8f0',
+          vLineColor: () => '#e2e8f0',
+          paddingLeft: () => 8,
+          paddingRight: () => 8,
+          paddingTop: () => 6,
+          paddingBottom: () => 6
         }
       });
     }
 
-    content.push({
-      text: 'Sistema de Evaluación de Proyectos - Powered by UPSE',
-      style: 'footer'
-    });
+    content.push({ text: 'Sistema de Evaluación de Proyectos - Powered by UPSE', style: 'footer' });
 
     const docDefinition = {
-      content: content,
-      styles: styles,
+      content,
+      styles,
       pageMargins: [40, 60, 40, 60],
-      defaultStyle: {
-        font: 'Roboto',
-        fontSize: 10
-      }
+      defaultStyle: { font: 'Roboto', fontSize: 10 }
     };
 
     const pdfDoc = printer.createPdfKitDocument(docDefinition);
@@ -534,38 +583,29 @@ exports.exportarPDF = async (req, res) => {
 
   } catch (error) {
     console.error('ERROR EXPORTAR PDF:', error);
-    return res.status(500).json({
-      ok: false,
-      mensaje: 'Error generando PDF: ' + error.message
-    });
+    return res.status(500).json({ ok: false, mensaje: 'Error generando PDF: ' + error.message });
   }
 };
 
 // =====================================
-// EXPORTAR PDF POR PROYECTO - CORREGIDO
+// EXPORTAR PDF POR PROYECTO
 // =====================================
 exports.exportarPDFProyecto = async (req, res) => {
   try {
     const proyectoId = parseInt(req.params.proyectoId);
-    console.log(`📤 Exportando PDF para proyecto ID: ${proyectoId}`);
 
-    // Verificar que el proyecto existe
     const [proyectos] = await db.query(
       `SELECT id, nombre, descripcion FROM proyectos WHERE id = ?`,
       [proyectoId]
     );
 
     if (proyectos.length === 0) {
-      return res.status(404).json({
-        ok: false,
-        mensaje: 'Proyecto no encontrado'
-      });
+      return res.status(404).json({ ok: false, mensaje: 'Proyecto no encontrado' });
     }
 
     const proyecto = proyectos[0];
 
-    // Obtener evaluaciones del proyecto
-    const [rows] = await db.query(`
+    const [rawRows] = await db.query(`
       SELECT
         u.nombre AS evaluador,
         u.rol,
@@ -581,19 +621,25 @@ exports.exportarPDFProyecto = async (req, res) => {
       ORDER BY puntaje DESC
     `, [proyectoId]);
 
-    // Si no hay evaluaciones, generar un PDF con mensaje
-    if (rows.length === 0) {
-      // Crear PDF simple con mensaje
-      const fonts = {
-        Roboto: {
-          normal: 'Helvetica',
-          bold: 'Helvetica-Bold',
-          italics: 'Helvetica-Oblique',
-          bolditalics: 'Helvetica-BoldOblique'
-        }
-      };
-      const printer = new PdfPrinter(fonts);
+    const rows = rawRows.map(r => ({
+      evaluador: r.evaluador,
+      rol: r.rol,
+      puntaje: num(r.puntaje),
+      promedio: num(r.promedio),
+      total_evaluaciones: num(r.total_evaluaciones)
+    }));
 
+    const fonts = {
+      Roboto: {
+        normal: 'Helvetica',
+        bold: 'Helvetica-Bold',
+        italics: 'Helvetica-Oblique',
+        bolditalics: 'Helvetica-BoldOblique'
+      }
+    };
+    const printer = new PdfPrinter(fonts);
+
+    if (rows.length === 0) {
       const docDefinition = {
         content: [
           { text: `REPORTE DE EVALUACIÓN`, style: 'header' },
@@ -622,78 +668,33 @@ exports.exportarPDFProyecto = async (req, res) => {
       return;
     }
 
-    // Configurar pdfmake
-    const fonts = {
-      Roboto: {
-        normal: 'Helvetica',
-        bold: 'Helvetica-Bold',
-        italics: 'Helvetica-Oblique',
-        bolditalics: 'Helvetica-BoldOblique'
-      }
-    };
-
-    const printer = new PdfPrinter(fonts);
-
     const styles = {
-      header: {
-        fontSize: 18,
-        bold: true,
-        alignment: 'center',
-        color: '#003366',
-        margin: [0, 0, 0, 5]
-      },
-      subheader: {
-        fontSize: 12,
-        alignment: 'center',
-        color: '#64748b',
-        margin: [0, 0, 0, 20]
-      },
-      sectionTitle: {
-        fontSize: 14,
-        bold: true,
-        color: '#003366',
-        margin: [0, 15, 0, 8]
-      },
-      tableHeader: {
-        fontSize: 11,
-        bold: true,
-        fillColor: '#003366',
-        color: 'white',
-        alignment: 'center'
-      },
-      tableCell: {
-        fontSize: 10,
-        alignment: 'center'
-      },
-      stats: {
-        fontSize: 11,
-        margin: [0, 0, 0, 3]
-      },
-      footer: {
-        fontSize: 9,
-        alignment: 'center',
-        color: '#94a3b8',
-        margin: [0, 20, 0, 0]
-      }
+      header: { fontSize: 18, bold: true, alignment: 'center', color: '#003366', margin: [0, 0, 0, 5] },
+      subheader: { fontSize: 12, alignment: 'center', color: '#64748b', margin: [0, 0, 0, 20] },
+      sectionTitle: { fontSize: 14, bold: true, color: '#003366', margin: [0, 15, 0, 8] },
+      tableHeader: { fontSize: 11, bold: true, fillColor: '#003366', color: 'white', alignment: 'center' },
+      tableCell: { fontSize: 10, alignment: 'center' },
+      stats: { fontSize: 11, margin: [0, 0, 0, 3] },
+      footer: { fontSize: 9, alignment: 'center', color: '#94a3b8', margin: [0, 20, 0, 0] }
     };
 
-    // Calcular estadísticas
     const totalEvaluadores = rows.length;
-    const promedioGeneral = rows.reduce((sum, r) => sum + (r.promedio || 0), 0) / (rows.length || 1);
-    const puntajeTotal = rows.reduce((sum, r) => sum + (r.puntaje || 0), 0);
+    const promedioGeneral = rows.reduce((sum, r) => sum + r.promedio, 0) / (rows.length || 1);
+    const puntajeTotal = rows.reduce((sum, r) => sum + r.puntaje, 0);
 
     const content = [];
-
     content.push({ text: `REPORTE DE EVALUACIÓN`, style: 'header' });
     content.push({ text: `Proyecto: ${proyecto.nombre.toUpperCase()}`, style: 'subheader' });
-    content.push({ text: `Generado: ${new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`, style: 'subheader' });
+    content.push({
+      text: `Generado: ${new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`,
+      style: 'subheader'
+    });
 
     if (proyecto.descripcion) {
       content.push({ text: `📝 Descripción: ${proyecto.descripcion}`, style: 'stats' });
     }
 
     content.push({ text: '\n' });
-
     content.push({
       text: [
         { text: '📊 Estadísticas del Proyecto\n\n', style: 'sectionTitle' },
@@ -704,61 +705,44 @@ exports.exportarPDFProyecto = async (req, res) => {
     });
 
     content.push({ text: '\n' });
+    content.push({ text: '📋 Evaluadores', style: 'sectionTitle' });
 
-    if (rows.length > 0) {
-      content.push({ text: '📋 Evaluadores', style: 'sectionTitle' });
+    const tableBody = [[
+      { text: 'Evaluador', style: 'tableHeader' },
+      { text: 'Rol', style: 'tableHeader' },
+      { text: 'Puntaje', style: 'tableHeader' },
+      { text: 'Promedio', style: 'tableHeader' }
+    ]];
 
-      const tableBody = [
-        [
-          { text: 'Evaluador', style: 'tableHeader' },
-          { text: 'Rol', style: 'tableHeader' },
-          { text: 'Puntaje', style: 'tableHeader' },
-          { text: 'Promedio', style: 'tableHeader' }
-        ]
-      ];
-
-      rows.forEach(row => {
-        tableBody.push([
-          { text: row.evaluador || 'N/A', style: 'tableCell' },
-          { text: row.rol || 'N/A', style: 'tableCell' },
-          { text: row.puntaje ? row.puntaje.toFixed(2) : '0.00', style: 'tableCell' },
-          { text: row.promedio ? row.promedio.toFixed(2) : '0.00', style: 'tableCell' }
-        ]);
-      });
-
-      content.push({
-        table: {
-          headerRows: 1,
-          widths: ['*', 'auto', 'auto', 'auto'],
-          body: tableBody
-        },
-        layout: {
-          fillColor: function(rowIndex) {
-            return rowIndex % 2 === 0 ? '#f8fafc' : null;
-          },
-          hLineColor: function() { return '#e2e8f0'; },
-          vLineColor: function() { return '#e2e8f0'; },
-          paddingLeft: function() { return 8; },
-          paddingRight: function() { return 8; },
-          paddingTop: function() { return 6; },
-          paddingBottom: function() { return 6; }
-        }
-      });
-    }
-
-    content.push({
-      text: 'Sistema de Evaluación de Proyectos - Powered by UPSE',
-      style: 'footer'
+    rows.forEach(row => {
+      tableBody.push([
+        { text: row.evaluador || 'N/A', style: 'tableCell' },
+        { text: row.rol || 'N/A', style: 'tableCell' },
+        { text: row.puntaje.toFixed(2), style: 'tableCell' },
+        { text: row.promedio.toFixed(2), style: 'tableCell' }
+      ]);
     });
 
-    const docDefinition = {
-      content: content,
-      styles: styles,
-      pageMargins: [40, 60, 40, 60],
-      defaultStyle: {
-        font: 'Roboto',
-        fontSize: 10
+    content.push({
+      table: { headerRows: 1, widths: ['*', 'auto', 'auto', 'auto'], body: tableBody },
+      layout: {
+        fillColor: (rowIndex) => rowIndex % 2 === 0 ? '#f8fafc' : null,
+        hLineColor: () => '#e2e8f0',
+        vLineColor: () => '#e2e8f0',
+        paddingLeft: () => 8,
+        paddingRight: () => 8,
+        paddingTop: () => 6,
+        paddingBottom: () => 6
       }
+    });
+
+    content.push({ text: 'Sistema de Evaluación de Proyectos - Powered by UPSE', style: 'footer' });
+
+    const docDefinition = {
+      content,
+      styles,
+      pageMargins: [40, 60, 40, 60],
+      defaultStyle: { font: 'Roboto', fontSize: 10 }
     };
 
     const pdfDoc = printer.createPdfKitDocument(docDefinition);
@@ -774,9 +758,6 @@ exports.exportarPDFProyecto = async (req, res) => {
 
   } catch (error) {
     console.error('ERROR EXPORTAR PDF PROYECTO:', error);
-    return res.status(500).json({
-      ok: false,
-      mensaje: 'Error generando PDF del proyecto: ' + error.message
-    });
+    return res.status(500).json({ ok: false, mensaje: 'Error generando PDF del proyecto: ' + error.message });
   }
 };
