@@ -92,9 +92,6 @@ const proyectoController = {
     }
   },
 
-  // =========================
-  // DELETE
-  // =========================
   async remove(req, res) {
     try {
       const id = parseInt(req.params.id);
@@ -118,7 +115,6 @@ const proyectoController = {
     } catch (error) {
       console.error('❌ ERROR DELETE PROYECTO:', error);
 
-      // Capturamos específicamente el error de restricción de llave foránea
       if (error.code === 'ER_ROW_IS_REFERENCED_2' || error.errno === 1451) {
         return res.status(409).json({
           ok: false,
