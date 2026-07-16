@@ -201,7 +201,8 @@ const authController = {
         [usuario.id, token, expiresAt]
       );
 
-      const enlace = `${process.env.FRONTEND_URL}/restablecer-password?token=${token}`;
+      // 👇 Único cambio: apunta a la página fusionada /recuperar-password
+      const enlace = `${process.env.FRONTEND_URL}/recuperar-password?token=${token}`;
 
       try {
         await enviarCorreoRecuperacion(usuario.email, usuario.nombre, enlace);
