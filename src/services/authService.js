@@ -1,14 +1,13 @@
 require('dotenv').config();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h';
 const SALT_ROUNDS = 10;
 
 if (!JWT_SECRET) {
-  // No tiramos el proceso aquí para no romper otros scripts (ej. seeds),
-  // pero sí avisamos fuerte: sin esto el login NO debe usarse en producción.
   console.warn('⚠️  JWT_SECRET no está definido en las variables de entorno.');
 }
 
@@ -49,6 +48,14 @@ const authService = {
    */
   verificarToken(token) {
     return jwt.verify(token, JWT_SECRET);
+  },
+
+  /**
+   * Genera un token aleatorio criptográficamente seguro para
+   * el flujo de recuperación de contraseña (32 bytes -> 64 caracteres hex).
+   */
+  generarTokenReset() {
+    return crypto.randomBytes(32).toString('hex');
   },
 };
 

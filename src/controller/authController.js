@@ -1,5 +1,7 @@
 const usuarioModel = require('../model/usuarioModel');
 const authService = require('../services/authService');
+const db = require('../config/db');
+const { enviarCorreoRecuperacion } = require('../config/mailer');
 
 const authController = {
 
@@ -137,7 +139,7 @@ const authController = {
   async perfil(req, res) {
     try {
       const usuario = await usuarioModel.buscarPorId(req.usuario.id);
-
+ 
       if (!usuario) {
         return res.status(404).json({
           ok: false,
@@ -157,6 +159,115 @@ const authController = {
         ok: false,
         mensaje: 'Error al obtener perfil'
       });
+    }
+  },
+
+
+  /**
+   * POST /api/auth/olvide-password
+   * Body: { email }
+   * Público. Genera un token de recuperación y envía el correo.
+   * Siempre responde con el mismo mensaje genérico (exista o no el
+   * correo) para no revelar qué correos están registrados en el sistema.
+   */
+  async olvidePassword(req, res) {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return res.status(400).json({ ok: false, mensaje: 'El correo es obligatorio' });
+      }
+
+      const respuestaGenerica = {
+        ok: true,
+        mensaje: 'Si el correo está registrado, recibirás un enlace de recuperación en unos minutos.'
+      };
+
+      const [usuarios] = await db.query(
+        'SELECT id, nombre, email FROM usuarios WHERE email = ? LIMIT 1',
+        [email.trim().toLowerCase()]
+      );
+
+      if (usuarios.length === 0) {
+        return res.json(respuestaGenerica);
+      }
+
+      const usuario = usuarios[0];
+      const token = authService.generarTokenReset();
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
+
+      await db.query(
+        'INSERT INTO password_resets (usuario_id, token, expires_at) VALUES (?, ?, ?)',
+        [usuario.id, token, expiresAt]
+      );
+
+      const enlace = `${process.env.FRONTEND_URL}/restablecer-password?token=${token}`;
+
+      try {
+        await enviarCorreoRecuperacion(usuario.email, usuario.nombre, enlace);
+      } catch (mailError) {
+        console.error('❌ Error enviando correo de recuperación:', mailError);
+        // No revelamos el fallo de envío al usuario final; queda registrado en logs.
+      }
+
+      return res.json(respuestaGenerica);
+
+    } catch (error) {
+      console.error('Error olvidePassword:', error);
+      return res.status(500).json({ ok: false, mensaje: 'Error al procesar la solicitud' });
+    }
+  },
+
+
+  /**
+   * POST /api/auth/resetear-password
+   * Body: { token, nuevaPassword }
+   * Público. Valida el token de recuperación y actualiza la contraseña.
+   */
+  async resetearPassword(req, res) {
+    try {
+      const { token, nuevaPassword } = req.body;
+
+      if (!token || !nuevaPassword) {
+        return res.status(400).json({ ok: false, mensaje: 'Token y nueva contraseña son obligatorios' });
+      }
+
+      if (nuevaPassword.length < 6) {
+        return res.status(400).json({ ok: false, mensaje: 'La contraseña debe tener al menos 6 caracteres' });
+      }
+
+      const [resets] = await db.query(
+        'SELECT * FROM password_resets WHERE token = ? AND used = 0 LIMIT 1',
+        [token]
+      );
+
+      if (resets.length === 0) {
+        return res.status(400).json({ ok: false, mensaje: 'El enlace de recuperación no es válido o ya fue usado' });
+      }
+
+      const reset = resets[0];
+
+      if (new Date(reset.expires_at) < new Date()) {
+        return res.status(400).json({ ok: false, mensaje: 'El enlace de recuperación ha expirado. Solicita uno nuevo.' });
+      }
+
+      const passwordHash = await authService.hashPassword(nuevaPassword);
+
+      await db.query(
+        'UPDATE usuarios SET password_hash = ? WHERE id = ?',
+        [passwordHash, reset.usuario_id]
+      );
+
+      await db.query(
+        'UPDATE password_resets SET used = 1 WHERE id = ?',
+        [reset.id]
+      );
+
+      return res.json({ ok: true, mensaje: 'Contraseña actualizada correctamente. Ya puedes iniciar sesión.' });
+
+    } catch (error) {
+      console.error('Error resetearPassword:', error);
+      return res.status(500).json({ ok: false, mensaje: 'Error al restablecer la contraseña' });
     }
   }
 

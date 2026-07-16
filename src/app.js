@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-
+const { verificarConexionCorreo } = require('./config/mailer');
 const authRoutes = require('./routes/authRoutes');
 const usuarioRoutes = require('./routes/usuarioRoutes');
 const proyectoRoutes = require('./routes/proyectoRoutes');
@@ -91,7 +91,7 @@ app.get('/api', (req, res) => {
 // SERVER
 // =========================
 const PORT = process.env.PORT || 3000;
-
+verificarConexionCorreo();
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Servidor activo en puerto ${PORT}`);
   console.log(`🔗 API: https://apievaluacion.teced.org`);
