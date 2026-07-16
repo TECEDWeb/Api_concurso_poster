@@ -92,22 +92,44 @@ const proyectoController = {
     }
   },
 
+  // =========================
+  // DELETE
+  // =========================
   async remove(req, res) {
     try {
       const id = parseInt(req.params.id);
+      console.log('📥 DELETE /proyectos/' + id);
 
       const existente = await ProyectoService.getById(id);
       if (!existente) {
-        return res.status(404).json({ ok: false, mensaje: 'Proyecto no encontrado' });
+        return res.status(404).json({
+          ok: false,
+          mensaje: 'Proyecto no encontrado'
+        });
       }
 
       await ProyectoService.delete(id);
 
-      return res.json({ ok: true, mensaje: 'Proyecto eliminado correctamente' });
+      return res.json({
+        ok: true,
+        mensaje: 'Proyecto eliminado correctamente'
+      });
 
     } catch (error) {
       console.error('❌ ERROR DELETE PROYECTO:', error);
-      return res.status(500).json({ ok: false, mensaje: 'Error al eliminar proyecto: ' + error.message });
+
+      // Capturamos específicamente el error de restricción de llave foránea
+      if (error.code === 'ER_ROW_IS_REFERENCED_2' || error.errno === 1451) {
+        return res.status(409).json({
+          ok: false,
+          mensaje: 'No se puede eliminar este proyecto porque ya tiene evaluadores asignados o evaluaciones registradas. Elimina primero esas asignaciones desde la sección "Asignaciones".'
+        });
+      }
+
+      return res.status(500).json({
+        ok: false,
+        mensaje: 'Error al eliminar proyecto: ' + error.message
+      });
     }
   }
 };
