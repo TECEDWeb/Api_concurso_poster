@@ -31,4 +31,19 @@ async function enviarCorreoRecuperacion(destinatario, nombre, enlaceReset) {
   });
 }
 
-module.exports = { enviarCorreoRecuperacion };
+/**
+ * Verifica que el transporte de correo esté correctamente configurado
+ * (credenciales válidas, conexión con Gmail exitosa). Se llama una vez
+ * al arrancar el servidor solo para dejar constancia en los logs;
+ * si falla, NO debe tumbar el servidor — solo se registra el error.
+ */
+async function verificarConexionCorreo() {
+  try {
+    await transporter.verify();
+    console.log('✅ Servicio de correo (Gmail) configurado correctamente');
+  } catch (error) {
+    console.error('⚠️ No se pudo verificar el servicio de correo:', error.message);
+  }
+}
+
+module.exports = { enviarCorreoRecuperacion, verificarConexionCorreo };

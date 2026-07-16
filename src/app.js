@@ -11,7 +11,7 @@ const dashboardRoutes = require('./routes/dashboardRoutes');
 const concursoRoutes = require('./routes/concursoRoutes');
 const reportesRoutes = require('./routes/reporteRoutes');
 const asignacionRoutes = require('./routes/asignacionRoutes');
-const rubricaRoutes = require('./routes/rubricaRoutes'); // ← AÑADIR ESTA LÍNEA
+const rubricaRoutes = require('./routes/rubricaRoutes');
 const evaluadorRoutes = require('./routes/evaluadorRoutes');
 const seccionesRoutes = require('./routes/seccionRoutes');
 const criterioRoutes = require('./routes/criterioRoutes');
@@ -48,7 +48,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/concursos', concursoRoutes);
 app.use('/api/reportes', reportesRoutes);
 app.use('/api/asignaciones', asignacionRoutes);
-app.use('/api/rubricas', rubricaRoutes); 
+app.use('/api/rubricas', rubricaRoutes);
 app.use('/api/evaluador', evaluadorRoutes);
 app.use('/api/secciones', seccionesRoutes);
 app.use('/api/criterios', criterioRoutes);
@@ -81,7 +81,7 @@ app.get('/api', (req, res) => {
       dashboard: '/api/dashboard',
       concursos: '/api/concursos',
       reportes: '/api/reportes',
-      rubricas: '/api/rubricas', // ← AÑADIR
+      rubricas: '/api/rubricas',
       health: '/api/health'
     }
   });
@@ -91,7 +91,15 @@ app.get('/api', (req, res) => {
 // SERVER
 // =========================
 const PORT = process.env.PORT || 3000;
-verificarConexionCorreo();
+
+// Protegido con try/catch: si el correo falla al verificar,
+// solo se registra el error, nunca debe tumbar el servidor completo.
+try {
+  verificarConexionCorreo();
+} catch (error) {
+  console.error('⚠️ Error inesperado verificando el correo (servidor continúa):', error.message);
+}
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Servidor activo en puerto ${PORT}`);
   console.log(`🔗 API: https://apievaluacion.teced.org`);
