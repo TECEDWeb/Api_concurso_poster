@@ -233,12 +233,14 @@ const usuarioController = {
 
   /**
    * RESETEAR CONTRASEÑA
+   * Body opcional: { nuevaPassword } — si se envía, se usa esa;
+   * si no, se genera una aleatoria segura.
    */
   async resetPassword(req, res) {
     try {
       const { id } = req.params;
+      const { nuevaPassword } = req.body;
 
-      // Verificar si el usuario existe
       const usuarioExistente = await usuarioModel.buscarPorId(id);
       if (!usuarioExistente) {
         return res.status(404).json({
@@ -247,10 +249,26 @@ const usuarioController = {
         });
       }
 
-      // Generar contraseña temporal
-      const tempPassword = Math.random().toString(36).slice(-8);
+      let passwordFinal = nuevaPassword;
+
+      if (passwordFinal) {
+        if (passwordFinal.length < 6) {
+          return res.status(400).json({
+            ok: false,
+            mensaje: 'La contraseña debe tener al menos 6 caracteres'
+          });
+        }
+      } else {
+        // Genera una contraseña aleatoria de 10 caracteres, legible
+        // (evita caracteres ambiguos como 0/O, 1/l)
+        const alfabeto = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+        passwordFinal = Array.from({ length: 10 }, () =>
+          alfabeto[Math.floor(Math.random() * alfabeto.length)]
+        ).join('');
+      }
+
       const saltRounds = 10;
-      const password_hash = await bcrypt.hash(tempPassword, saltRounds);
+      const password_hash = await bcrypt.hash(passwordFinal, saltRounds);
 
       const resetado = await usuarioModel.resetPassword(id, password_hash);
 
@@ -265,7 +283,7 @@ const usuarioController = {
         ok: true,
         mensaje: 'Contraseña reseteada correctamente',
         data: {
-          nueva_contraseña: tempPassword
+          nuevaPassword: passwordFinal
         }
       });
 
