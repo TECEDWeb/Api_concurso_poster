@@ -99,9 +99,54 @@ const ProyectoService = {
     return true;
   },
 
+  /**
+   * Elimina un proyecto y TODO lo que depende de él, en cascada,
+   * dentro de una transacción: detalles_evaluacion -> evaluaciones
+   * -> asignaciones -> proyectos. Si cualquier paso falla, se revierte
+   * todo (rollback), evitando dejar registros huérfanos.
+   */
   async delete(id) {
-    await db.query(`DELETE FROM proyectos WHERE id = ?`, [id]);
-    return true;
+    const connection = await db.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      // 1. Borrar detalles_evaluacion de las evaluaciones de este proyecto
+      await connection.query(
+        `DELETE d FROM detalles_evaluacion d
+         INNER JOIN evaluaciones e ON e.id = d.evaluacion_id
+         WHERE e.proyecto_id = ?`,
+        [id]
+      );
+
+      // 2. Borrar las evaluaciones del proyecto
+      await connection.query(
+        `DELETE FROM evaluaciones WHERE proyecto_id = ?`,
+        [id]
+      );
+
+      // 3. Borrar las asignaciones del proyecto
+      await connection.query(
+        `DELETE FROM asignaciones WHERE proyecto_id = ?`,
+        [id]
+      );
+
+      // 4. Finalmente, borrar el proyecto
+      await connection.query(
+        `DELETE FROM proyectos WHERE id = ?`,
+        [id]
+      );
+
+      await connection.commit();
+      return true;
+
+    } catch (error) {
+      await connection.rollback();
+      console.error('❌ ERROR en cascada al eliminar proyecto:', error);
+      throw error;
+    } finally {
+      connection.release();
+    }
   }
 };
 
