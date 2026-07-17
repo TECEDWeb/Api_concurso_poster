@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const evaluacionController = require('../controllers/evaluacionController');
-// ✅ IMPORTACIONES CORRECTAS
+// ✅ CORREGIDO: usar 'controller' (singular) en lugar de 'controllers' (plural)
+const evaluacionController = require('../controller/evaluacionController');
 const authMiddleware = require('../middleware/authMiddleware');
 const isAdminMiddleware = require('../middleware/isAdminMiddleware');
 
