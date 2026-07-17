@@ -28,26 +28,41 @@ const proyectoController = {
     }
   },
 
+  /**
+   * Body esperado: { nombre, descripcion, concursoId, nivel, area, activo,
+   *                   participantes: string[], tutores: string[] }
+   * participantes y tutores son arrays de nombres, tal como los arma
+   * el frontend a partir del texto separado por comas.
+   */
   async create(req, res) {
     try {
-      const { nombre, descripcion, concursoId, estudiante_nombre, nivel, area, activo } = req.body;
+      const { nombre, descripcion, concursoId, nivel, area, activo, participantes, tutores } = req.body;
 
       if (!nombre || nombre.trim() === '') {
         return res.status(400).json({ ok: false, mensaje: 'El nombre del proyecto es obligatorio' });
       }
 
-      if (!estudiante_nombre || estudiante_nombre.trim() === '') {
-        return res.status(400).json({ ok: false, mensaje: 'El nombre del estudiante es obligatorio' });
+      if (!Array.isArray(participantes) || participantes.filter(p => p && p.trim()).length === 0) {
+        return res.status(400).json({ ok: false, mensaje: 'Debe registrar al menos un participante' });
+      }
+
+      const tutoresValidos = Array.isArray(tutores) ? tutores.filter(t => t && t.trim()) : [];
+      if (tutoresValidos.length === 0) {
+        return res.status(400).json({ ok: false, mensaje: 'Debe registrar al menos el tutor encargado' });
+      }
+      if (tutoresValidos.length > 4) {
+        return res.status(400).json({ ok: false, mensaje: 'Máximo 4 tutores por proyecto' });
       }
 
       const proyecto = await ProyectoService.create({
         concurso_id: concursoId || null,
         nombre: nombre.trim(),
         descripcion: descripcion || null,
-        estudiante_nombre: estudiante_nombre.trim(),
         nivel: nivel || null,
         area: area || null,
-        activo: activo !== undefined ? activo : true
+        activo: activo !== undefined ? activo : true,
+        participantes,
+        tutores
       });
 
       return res.status(201).json({ ok: true, mensaje: 'Proyecto creado correctamente', data: proyecto });
@@ -61,7 +76,7 @@ const proyectoController = {
   async update(req, res) {
     try {
       const id = parseInt(req.params.id);
-      const { nombre, descripcion, concursoId, estudiante_nombre, nivel, area, activo } = req.body;
+      const { nombre, descripcion, concursoId, nivel, area, activo, participantes, tutores } = req.body;
 
       if (!nombre || nombre.trim() === '') {
         return res.status(400).json({ ok: false, mensaje: 'El nombre del proyecto es obligatorio' });
@@ -72,14 +87,19 @@ const proyectoController = {
         return res.status(404).json({ ok: false, mensaje: 'Proyecto no encontrado' });
       }
 
+      if (tutores && Array.isArray(tutores) && tutores.filter(t => t && t.trim()).length > 4) {
+        return res.status(400).json({ ok: false, mensaje: 'Máximo 4 tutores por proyecto' });
+      }
+
       await ProyectoService.update(id, {
         concurso_id: concursoId !== undefined ? concursoId : existente.concurso_id,
         nombre: nombre.trim(),
         descripcion: descripcion !== undefined ? descripcion : existente.descripcion,
-        estudiante_nombre: estudiante_nombre || existente.estudiante_nombre,
         nivel: nivel !== undefined ? nivel : existente.nivel,
         area: area !== undefined ? area : existente.area,
-        activo: activo !== undefined ? activo : existente.activo
+        activo: activo !== undefined ? activo : existente.activo,
+        participantes,
+        tutores
       });
 
       const proyectoActualizado = await ProyectoService.getById(id);
@@ -95,22 +115,15 @@ const proyectoController = {
   async remove(req, res) {
     try {
       const id = parseInt(req.params.id);
-      console.log('📥 DELETE /proyectos/' + id);
 
       const existente = await ProyectoService.getById(id);
       if (!existente) {
-        return res.status(404).json({
-          ok: false,
-          mensaje: 'Proyecto no encontrado'
-        });
+        return res.status(404).json({ ok: false, mensaje: 'Proyecto no encontrado' });
       }
 
       await ProyectoService.delete(id);
 
-      return res.json({
-        ok: true,
-        mensaje: 'Proyecto eliminado correctamente'
-      });
+      return res.json({ ok: true, mensaje: 'Proyecto eliminado correctamente' });
 
     } catch (error) {
       console.error('❌ ERROR DELETE PROYECTO:', error);
@@ -122,10 +135,7 @@ const proyectoController = {
         });
       }
 
-      return res.status(500).json({
-        ok: false,
-        mensaje: 'Error al eliminar proyecto: ' + error.message
-      });
+      return res.status(500).json({ ok: false, mensaje: 'Error al eliminar proyecto: ' + error.message });
     }
   }
 };
