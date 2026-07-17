@@ -1,42 +1,61 @@
 const express = require('express');
 const router = express.Router();
+const evaluacionController = require('../controllers/evaluacionController');
+const { auth, isAdmin } = require('../middlewares/auth');
 
-const evaluacionController = require('../controller/evaluacionController');
-const authMiddleware = require('../middleware/authMiddleware');
-const roleMiddleware = require('../middleware/roleMiddleware');
+// ============================================
+// RUTAS PÚBLICAS (con autenticación)
+// ============================================
 
-// =========================
-// ADMIN / GENERAL
-// =========================
-router.get('/', authMiddleware, evaluacionController.getAll);
-router.get('/reporte-admin', authMiddleware, evaluacionController.getReporteAdmin);
+// GET /api/evaluaciones - Listar todas las evaluaciones (admin)
+router.get('/', auth, isAdmin, evaluacionController.getAll);
 
-// =========================
-// EVALUADOR
-// =========================
-router.get('/asignados', authMiddleware, evaluacionController.getAsignados);
-router.get('/mis-resultados', authMiddleware, evaluacionController.getMisResultados);
-router.get('/resumen', authMiddleware, evaluacionController.getResumen);
+// GET /api/evaluaciones/reporte-admin - Reporte para admin
+router.get('/reporte-admin', auth, isAdmin, evaluacionController.getReporteAdmin);
 
-// =========================
-// FORMULARIO (IMPORTANTE)
-// =========================
-router.get('/:id/formulario', authMiddleware, evaluacionController.getFormulario);
-router.post('/:id/guardar', authMiddleware, evaluacionController.guardar);
+// GET /api/evaluaciones/asignados - Proyectos asignados al evaluador
+router.get('/asignados', auth, evaluacionController.getAsignados);
 
-router.post('/asignar', authMiddleware, roleMiddleware('admin'), evaluacionController.asignar );
-// ADMIN: Reabrir evaluación
-router.put('/:id/reabrir', auth, isAdmin, evaluacionController.reabrirEvaluacion);
+// GET /api/evaluaciones/mis-resultados - Resultados del evaluador
+router.get('/mis-resultados', auth, evaluacionController.getMisResultados);
 
-// ADMIN: Eliminar evaluación
-router.delete('/:id', auth, isAdmin, evaluacionController.eliminarEvaluacion);
+// GET /api/evaluaciones/resumen - Resumen de evaluaciones
+router.get('/resumen', auth, evaluacionController.getResumen);
 
-// EVALUADOR: Obtener evaluación para editar
+// GET /api/evaluaciones/:id/formulario - Formulario para evaluar
+router.get('/:id/formulario', auth, evaluacionController.getFormulario);
+
+// GET /api/evaluaciones/:id/editar - Obtener evaluación para editar (evaluador)
 router.get('/:id/editar', auth, evaluacionController.getEvaluacionParaEditar);
 
-// EVALUADOR: Actualizar evaluación (sin finalizar)
+// POST /api/evaluaciones/asignar - Asignar proyecto a evaluador (admin)
+router.post('/asignar', auth, isAdmin, evaluacionController.asignar);
+
+// POST /api/evaluaciones/:id/guardar - Guardar evaluación (evaluador)
+router.post('/:id/guardar', auth, evaluacionController.guardar);
+
+// PUT /api/evaluaciones/:id/actualizar - Actualizar evaluación (evaluador)
 router.put('/:id/actualizar', auth, evaluacionController.actualizarEvaluacion);
 
-// EVALUADOR: Finalizar evaluación
+// POST /api/evaluaciones/:id/finalizar - Finalizar evaluación (evaluador)
 router.post('/:id/finalizar', auth, evaluacionController.finalizarEvaluacion);
+
+// PUT /api/evaluaciones/:id/reabrir - Reabrir evaluación (admin)
+router.put('/:id/reabrir', auth, isAdmin, evaluacionController.reabrirEvaluacion);
+
+// DELETE /api/evaluaciones/:id - Eliminar evaluación (admin)
+router.delete('/:id', auth, isAdmin, evaluacionController.eliminarEvaluacion);
+
+// GET /api/evaluaciones/:id - Obtener evaluación por ID (admin)
+router.get('/:id', auth, isAdmin, evaluacionController.getById);
+
+// POST /api/evaluaciones - Crear evaluación (admin)
+router.post('/', auth, isAdmin, evaluacionController.create);
+
+// PUT /api/evaluaciones/:id - Actualizar evaluación (admin)
+router.put('/:id', auth, isAdmin, evaluacionController.update);
+
+// DELETE /api/evaluaciones/:id - Eliminar evaluación (admin)
+router.delete('/:id', auth, isAdmin, evaluacionController.remove);
+
 module.exports = router;
