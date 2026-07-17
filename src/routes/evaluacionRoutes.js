@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-// ✅ CORREGIDO: usar 'controller' (singular)
 const evaluacionController = require('../controller/evaluacionController');
 const authMiddleware = require('../middleware/authMiddleware');
 const isAdminMiddleware = require('../middleware/isAdminMiddleware');
