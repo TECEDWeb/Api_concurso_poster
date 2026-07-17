@@ -59,9 +59,10 @@ const controller = {
   async crear(req, res) {
     try {
       console.log("========================================");
-      console.log("📥 CREAR ASIGNACION");
-      console.log("📦 BODY RECIBIDO:", req.body);
-      console.log("👤 Usuario:", req.usuario);
+      console.log("📥 CONTROLLER: CREAR ASIGNACION");
+      console.log("========================================");
+      console.log("📦 BODY RECIBIDO:", JSON.stringify(req.body, null, 2));
+      console.log("👤 Usuario autenticado:", req.usuario);
       console.log("========================================");
 
       const { proyectoId, evaluadorId, proyecto_id, evaluador_id } = req.body;
@@ -70,19 +71,21 @@ const controller = {
       const proyecto = proyectoId || proyecto_id;
       const evaluador = evaluadorId || evaluador_id;
 
-      console.log("📌 Proyecto ID:", proyecto);
-      console.log("📌 Evaluador ID:", evaluador);
+      console.log("📌 Proyecto ID (normalizado):", proyecto);
+      console.log("📌 Evaluador ID (normalizado):", evaluador);
 
       if (!proyecto || !evaluador) {
+        console.log("❌ Faltan datos: proyecto o evaluador");
         return res.status(400).json({
           ok: false,
           mensaje: 'Datos incompletos: proyecto y evaluador son obligatorios'
         });
       }
 
+      console.log("🔵 Llamando a AsignacionService.crear()...");
       const data = await AsignacionService.crear(proyecto, evaluador);
 
-      console.log("✅ ASIGNACION CREADA:", data);
+      console.log("✅ ASIGNACION CREADA EXITOSAMENTE:", data);
 
       return res.status(201).json({
         ok: true,
@@ -91,7 +94,12 @@ const controller = {
       });
 
     } catch (err) {
-      console.error("❌ ERROR CREANDO ASIGNACION:", err);
+      console.error("========================================");
+      console.error("❌ ERROR EN CONTROLLER.crear");
+      console.error("========================================");
+      console.error("📌 Mensaje de error:", err.message);
+      console.error("📌 Stack trace:", err.stack);
+      console.error("========================================");
       
       // ✅ MENSAJES AMIGABLES PARA EL USUARIO
       let mensaje = err.message;
@@ -99,18 +107,29 @@ const controller = {
 
       // Detectar errores específicos
       if (mensaje === 'El proyecto no tiene rúbrica') {
+        console.log("⚠️  CASO DETECTADO: Proyecto sin rúbrica");
         mensaje = '❌ El proyecto no tiene una rúbrica asociada. Por favor, crea una rúbrica primero.';
       } else if (mensaje === 'La rúbrica no tiene secciones configuradas. Ve a Rúbricas → Configurar contenido primero.') {
+        console.log("⚠️  CASO DETECTADO: Rúbrica vacía (sin secciones)");
         mensaje = '⚠️ La rúbrica existe pero está vacía. Ve a la sección Rúbricas y configura el contenido (secciones y criterios).';
       } else if (mensaje === 'Ya existe una evaluación para este proyecto y evaluador') {
+        console.log("⚠️  CASO DETECTADO: Asignación duplicada");
         mensaje = '⚠️ Ya existe una asignación para este proyecto y evaluador.';
       } else if (mensaje === 'Proyecto no encontrado') {
+        console.log("⚠️  CASO DETECTADO: Proyecto inexistente");
         mensaje = '❌ Proyecto no encontrado. Verifica que exista.';
         statusCode = 404;
       } else if (mensaje === 'Evaluador no encontrado') {
+        console.log("⚠️  CASO DETECTADO: Evaluador inexistente");
         mensaje = '❌ Evaluador no encontrado. Verifica que exista y tenga rol de evaluador.';
         statusCode = 404;
+      } else {
+        console.log("⚠️  CASO NO DETECTADO: Error genérico");
+        // Mantener el mensaje original
       }
+
+      console.log("📤 Respondiendo con:", { ok: false, mensaje });
+      console.log("========================================");
 
       return res.status(statusCode).json({
         ok: false,

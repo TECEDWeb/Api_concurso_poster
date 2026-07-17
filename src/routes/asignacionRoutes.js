@@ -5,6 +5,9 @@ const auth = require('../middleware/authMiddleware');
 const role = require('../middleware/roleMiddleware');
 const controller = require('../controller/asignacionController');
 
+// Log para verificar que las rutas se cargan
+console.log("✅ RUTAS DE ASIGNACION CARGADAS");
+
 // Listar asignaciones
 router.get('/', auth, role('admin'), controller.listar);
 
