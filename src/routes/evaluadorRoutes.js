@@ -1,60 +1,34 @@
 const express = require('express');
 const router = express.Router();
-const evaluacionController = require('../controllers/evaluacionController');
-// ✅ IMPORTACIONES CORRECTAS
+// ✅ CORREGIDO: usar 'controller' (singular)
+const evaluadorController = require('../controller/evaluadorController');
+// ✅ CORREGIDO: usar 'controller' (singular)
+const evaluacionController = require('../controller/evaluacionController');
 const authMiddleware = require('../middleware/authMiddleware');
-const isAdminMiddleware = require('../middleware/isAdminMiddleware');
 
 // ============================================
-// RUTAS PÚBLICAS (con autenticación)
+// RUTAS PARA EVALUADOR
 // ============================================
 
-// GET /api/evaluaciones - Listar todas las evaluaciones (admin)
-router.get('/', authMiddleware, isAdminMiddleware, evaluacionController.getAll);
+// GET /api/evaluador/dashboard-stats
+router.get('/dashboard-stats', authMiddleware, evaluadorController.getDashboardStats);
 
-// GET /api/evaluaciones/reporte-admin - Reporte para admin
-router.get('/reporte-admin', authMiddleware, isAdminMiddleware, evaluacionController.getReporteAdmin);
+// GET /api/evaluador/actividades-recientes
+router.get('/actividades-recientes', authMiddleware, evaluadorController.getActividadesRecientes);
 
-// GET /api/evaluaciones/asignados - Proyectos asignados al evaluador
-router.get('/asignados', authMiddleware, evaluacionController.getAsignados);
+// GET /api/evaluador/proyectos-asignados
+router.get('/proyectos-asignados', authMiddleware, evaluadorController.getProyectosAsignados);
 
-// GET /api/evaluaciones/mis-resultados - Resultados del evaluador
-router.get('/mis-resultados', authMiddleware, evaluacionController.getMisResultados);
+// GET /api/evaluador/proyecto/:id
+router.get('/proyecto/:id', authMiddleware, evaluadorController.getProyectoAsignado);
 
-// GET /api/evaluaciones/resumen - Resumen de evaluaciones
-router.get('/resumen', authMiddleware, evaluacionController.getResumen);
+// POST /api/evaluador/evaluacion
+router.post('/evaluacion', authMiddleware, evaluadorController.guardarEvaluacion);
 
-// GET /api/evaluaciones/:id/formulario - Formulario para evaluar
-router.get('/:id/formulario', authMiddleware, evaluacionController.getFormulario);
+// GET /api/evaluador/mis-resultados
+router.get('/mis-resultados', authMiddleware, evaluadorController.getMisResultados);
 
-// GET /api/evaluaciones/:id/editar - Obtener evaluación para editar (evaluador)
-router.get('/:id/editar', authMiddleware, evaluacionController.getEvaluacionParaEditar);
-
-// POST /api/evaluaciones/asignar - Asignar proyecto a evaluador (admin)
-router.post('/asignar', authMiddleware, isAdminMiddleware, evaluacionController.asignar);
-
-// POST /api/evaluaciones/:id/guardar - Guardar evaluación (evaluador)
-router.post('/:id/guardar', authMiddleware, evaluacionController.guardar);
-
-// PUT /api/evaluaciones/:id/actualizar - Actualizar evaluación (evaluador)
-router.put('/:id/actualizar', authMiddleware, evaluacionController.actualizarEvaluacion);
-
-// POST /api/evaluaciones/:id/finalizar - Finalizar evaluación (evaluador)
-router.post('/:id/finalizar', authMiddleware, evaluacionController.finalizarEvaluacion);
-
-// PUT /api/evaluaciones/:id/reabrir - Reabrir evaluación (admin)
-router.put('/:id/reabrir', authMiddleware, isAdminMiddleware, evaluacionController.reabrirEvaluacion);
-
-// DELETE /api/evaluaciones/:id - Eliminar evaluación (admin)
-router.delete('/:id', authMiddleware, isAdminMiddleware, evaluacionController.eliminarEvaluacion);
-
-// GET /api/evaluaciones/:id - Obtener evaluación por ID (admin)
-router.get('/:id', authMiddleware, isAdminMiddleware, evaluacionController.getById);
-
-// POST /api/evaluaciones - Crear evaluación (admin)
-router.post('/', authMiddleware, isAdminMiddleware, evaluacionController.create);
-
-// PUT /api/evaluaciones/:id - Actualizar evaluación (admin)
-router.put('/:id', authMiddleware, isAdminMiddleware, evaluacionController.update);
+// GET /api/evaluador/resultado/:id
+router.get('/resultado/:id', authMiddleware, evaluadorController.getResultadoDetalle);
 
 module.exports = router;
