@@ -22,6 +22,13 @@ const EvaluacionService = {
       [concursoId]
     );
 
+    // Escala global de niveles del concurso (fallback cuando un criterio
+    // no tiene niveles propios). Se carga UNA sola vez aquí, fuera del loop.
+    const [nivelesGlobales] = await db.query(
+      `SELECT * FROM niveles WHERE concurso_id = ? AND criterio_id IS NULL ORDER BY puntaje DESC`,
+      [concursoId]
+    );
+
     for (const sec of secciones) {
       const [criterios] = await db.query(
         `SELECT * FROM criterios WHERE seccion_id = ? ORDER BY orden`,
@@ -29,11 +36,14 @@ const EvaluacionService = {
       );
 
       for (const criterio of criterios) {
-        const [niveles] = await db.query(
+        const [nivelesPropios] = await db.query(
           `SELECT * FROM niveles WHERE criterio_id = ? ORDER BY puntaje DESC`,
           [criterio.id]
         );
-        criterio.niveles = niveles;
+
+        // Si el criterio tiene niveles propios, se usan esos.
+        // Si no, cae a la escala global del concurso.
+        criterio.niveles = nivelesPropios.length > 0 ? nivelesPropios : nivelesGlobales;
       }
 
       sec.criterios = criterios;
