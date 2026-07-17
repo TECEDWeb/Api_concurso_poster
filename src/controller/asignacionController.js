@@ -93,13 +93,26 @@ const controller = {
     } catch (err) {
       console.error("❌ ERROR CREANDO ASIGNACION:", err);
       
-      // Mensajes de error amigables
+      // ✅ MENSAJES AMIGABLES PARA EL USUARIO
       let mensaje = err.message;
+      let statusCode = 400;
+
+      // Detectar errores específicos
       if (mensaje === 'El proyecto no tiene rúbrica') {
-        mensaje = 'El proyecto no tiene una rúbrica asociada. Se creará automáticamente.';
+        mensaje = '❌ El proyecto no tiene una rúbrica asociada. Por favor, crea una rúbrica primero.';
+      } else if (mensaje === 'La rúbrica no tiene secciones configuradas. Ve a Rúbricas → Configurar contenido primero.') {
+        mensaje = '⚠️ La rúbrica existe pero está vacía. Ve a la sección Rúbricas y configura el contenido (secciones y criterios).';
+      } else if (mensaje === 'Ya existe una evaluación para este proyecto y evaluador') {
+        mensaje = '⚠️ Ya existe una asignación para este proyecto y evaluador.';
+      } else if (mensaje === 'Proyecto no encontrado') {
+        mensaje = '❌ Proyecto no encontrado. Verifica que exista.';
+        statusCode = 404;
+      } else if (mensaje === 'Evaluador no encontrado') {
+        mensaje = '❌ Evaluador no encontrado. Verifica que exista y tenga rol de evaluador.';
+        statusCode = 404;
       }
 
-      return res.status(400).json({
+      return res.status(statusCode).json({
         ok: false,
         mensaje: mensaje
       });

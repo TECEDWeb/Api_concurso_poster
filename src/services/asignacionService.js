@@ -76,23 +76,28 @@ const AsignacionService = {
       throw new Error('Evaluador no encontrado');
     }
 
-    // La rúbrica del concurso debe existir y estar configurada
-    // (secciones/criterios/niveles) ANTES de poder asignar evaluadores.
-    // Ya no se auto-genera contenido de relleno: eso generaba criterios
-    // genéricos sin relación real con el concurso, y podía duplicar
-    // rúbricas violando el constraint único en rubricas.concurso_id.
+    // ✅ VERIFICAR QUE EXISTA LA RÚBRICA
     const [rubricas] = await db.query(
       `SELECT id FROM rubricas WHERE concurso_id = ?`,
       [proyecto.concurso_id]
     );
 
     if (rubricas.length === 0) {
-      throw new Error(
-        'Este concurso no tiene una rúbrica configurada. Ve a Rúbricas → Configurar contenido antes de asignar evaluadores.'
-      );
+      // ⚠️ TEXTO EXACTO que el controller espera para mostrar mensaje amigable
+      throw new Error('El proyecto no tiene rúbrica');
     }
 
     const rubricaId = rubricas[0].id;
+
+    // ✅ VERIFICAR QUE LA RÚBRICA TENGA SECCIONES (CONTENIDO)
+    const [secciones] = await db.query(
+      `SELECT id FROM secciones WHERE rubrica_id = ? LIMIT 1`,
+      [rubricaId]
+    );
+
+    if (secciones.length === 0) {
+      throw new Error('La rúbrica no tiene secciones configuradas. Ve a Rúbricas → Configurar contenido primero.');
+    }
 
     const [existe] = await db.query(
       `SELECT id FROM evaluaciones WHERE proyecto_id = ? AND evaluador_id = ?`,
