@@ -230,6 +230,191 @@ const evaluacionController = {
       });
 
     }
+  },
+  /**
+ * PUT /api/evaluaciones/:id/reabrir
+ * ADMIN: Reabrir evaluación para que el evaluador pueda volver a evaluar
+ */
+  async reabrirEvaluacion(req, res) {
+    try {
+      const evaluacionId = req.params.id;
+
+      const result = await EvaluacionService.reabrirEvaluacion(evaluacionId);
+
+      return res.json(result);
+
+    } catch (err) {
+      console.error("ERROR reabrirEvaluacion:", err);
+      return res.status(500).json({
+        ok: false,
+        mensaje: err.message || "Error al reabrir la evaluación"
+      });
+    }
+  },
+
+  /**
+   * DELETE /api/evaluaciones/:id
+   * ADMIN: Eliminar evaluación completamente
+   */
+  async eliminarEvaluacion(req, res) {
+    try {
+      const evaluacionId = req.params.id;
+
+      const result = await EvaluacionService.eliminarEvaluacion(evaluacionId);
+
+      return res.json(result);
+
+    } catch (err) {
+      console.error("ERROR eliminarEvaluacion:", err);
+      return res.status(500).json({
+        ok: false,
+        mensaje: err.message || "Error al eliminar la evaluación"
+      });
+    }
+  },
+
+  /**
+   * GET /api/evaluaciones/:id/editar
+   * EVALUADOR: Obtener detalles de evaluación para editar
+   */
+  async getEvaluacionParaEditar(req, res) {
+    try {
+      const evaluacionId = req.params.id;
+      const evaluadorId = req.usuario.id;
+
+      // Verificar que el evaluador sea el dueño de la evaluación
+      const [evaluacion] = await db.query(
+        `SELECT evaluador_id FROM evaluaciones WHERE id = ?`,
+        [evaluacionId]
+      );
+
+      if (!evaluacion.length) {
+        return res.status(404).json({
+          ok: false,
+          mensaje: 'Evaluación no encontrada'
+        });
+      }
+
+      if (evaluacion[0].evaluador_id !== evaluadorId) {
+        return res.status(403).json({
+          ok: false,
+          mensaje: 'No tienes permisos para editar esta evaluación'
+        });
+      }
+
+      const result = await EvaluacionService.getDetalleEvaluacionParaEdicion(evaluacionId);
+
+      return res.json(result);
+
+    } catch (err) {
+      console.error("ERROR getEvaluacionParaEditar:", err);
+      return res.status(500).json({
+        ok: false,
+        mensaje: err.message || "Error al obtener detalles de la evaluación"
+      });
+    }
+  },
+
+  /**
+   * PUT /api/evaluaciones/:id/actualizar
+   * EVALUADOR: Actualizar respuestas (sin finalizar)
+   */
+  async actualizarEvaluacion(req, res) {
+    try {
+      const evaluacionId = req.params.id;
+      const evaluadorId = req.usuario.id;
+
+      // Verificar que el evaluador sea el dueño
+      const [evaluacion] = await db.query(
+        `SELECT evaluador_id, estado FROM evaluaciones WHERE id = ?`,
+        [evaluacionId]
+      );
+
+      if (!evaluacion.length) {
+        return res.status(404).json({
+          ok: false,
+          mensaje: 'Evaluación no encontrada'
+        });
+      }
+
+      if (evaluacion[0].evaluador_id !== evaluadorId) {
+        return res.status(403).json({
+          ok: false,
+          mensaje: 'No tienes permisos para editar esta evaluación'
+        });
+      }
+
+      if (evaluacion[0].estado === 'evaluado') {
+        return res.status(400).json({
+          ok: false,
+          mensaje: 'Esta evaluación ya fue finalizada y no puede ser editada'
+        });
+      }
+
+      const result = await EvaluacionService.actualizarEvaluacion({
+        evaluacionId,
+        observacion: req.body.observacion,
+        detalles: req.body.detalles
+      });
+
+      return res.json(result);
+
+    } catch (err) {
+      console.error("ERROR actualizarEvaluacion:", err);
+      return res.status(500).json({
+        ok: false,
+        mensaje: err.message || "Error al actualizar la evaluación"
+      });
+    }
+  },
+
+  /**
+   * POST /api/evaluaciones/:id/finalizar
+   * EVALUADOR: Finalizar evaluación (cambiar estado a evaluado)
+   */
+  async finalizarEvaluacion(req, res) {
+    try {
+      const evaluacionId = req.params.id;
+      const evaluadorId = req.usuario.id;
+
+      // Verificar que el evaluador sea el dueño
+      const [evaluacion] = await db.query(
+        `SELECT evaluador_id, estado FROM evaluaciones WHERE id = ?`,
+        [evaluacionId]
+      );
+
+      if (!evaluacion.length) {
+        return res.status(404).json({
+          ok: false,
+          mensaje: 'Evaluación no encontrada'
+        });
+      }
+
+      if (evaluacion[0].evaluador_id !== evaluadorId) {
+        return res.status(403).json({
+          ok: false,
+          mensaje: 'No tienes permisos para finalizar esta evaluación'
+        });
+      }
+
+      if (evaluacion[0].estado === 'evaluado') {
+        return res.status(400).json({
+          ok: false,
+          mensaje: 'Esta evaluación ya fue finalizada'
+        });
+      }
+
+      const result = await EvaluacionService.finalizarEvaluacion(evaluacionId);
+
+      return res.json(result);
+
+    } catch (err) {
+      console.error("ERROR finalizarEvaluacion:", err);
+      return res.status(500).json({
+        ok: false,
+        mensaje: err.message || "Error al finalizar la evaluación"
+      });
+    }
   }
 };
 
