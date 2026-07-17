@@ -1,143 +1,184 @@
-const pool = require('../config/db');
+const db = require('../config/db');
 
 const usuarioModel = {
-  /**
-   * Buscar usuario por cédula
-   */
+
+  // ============================================
+  // LISTAR USUARIOS CON FILTRO OPCIONAL
+  // ============================================
+  async listar({ rol } = {}) {
+    let query = 'SELECT id, cedula, nombre, email, telefono, rol, departamento, activo, created_at FROM usuarios';
+    const params = [];
+
+    if (rol) {
+      query += ' WHERE rol = ?';
+      params.push(rol);
+    }
+
+    query += ' ORDER BY created_at DESC';
+
+    const [rows] = await db.query(query, params);
+    return rows;
+  },
+
+  // ============================================
+  // OBTENER SOLO EVALUADORES
+  // ============================================
+  async getEvaluadores() {
+    const [rows] = await db.query(
+      `SELECT id, cedula, nombre, email, telefono, rol, departamento, activo 
+       FROM usuarios 
+       WHERE rol = 'evaluador' AND activo = 1
+       ORDER BY nombre ASC`
+    );
+    return rows;
+  },
+
+  // ============================================
+  // BUSCAR POR CÉDULA
+  // ============================================
   async buscarPorCedula(cedula) {
-    const [rows] = await pool.query(
-      `SELECT id, cedula, nombre, email, telefono, password_hash, rol,
-              departamento, activo
-       FROM usuarios
-       WHERE cedula = ?
-       LIMIT 1`,
+    const [rows] = await db.query(
+      `SELECT id, cedula, nombre, email, telefono, rol, departamento, activo, password_hash 
+       FROM usuarios 
+       WHERE cedula = ?`,
       [cedula]
     );
     return rows[0] || null;
   },
 
-  /**
-   * Buscar usuario por ID
-   */
+  // ============================================
+  // BUSCAR POR EMAIL
+  // ============================================
+  async buscarPorEmail(email) {
+    const [rows] = await db.query(
+      `SELECT id, cedula, nombre, email, telefono, rol, departamento, activo, password_hash 
+       FROM usuarios 
+       WHERE email = ?`,
+      [email]
+    );
+    return rows[0] || null;
+  },
+
+  // ============================================
+  // BUSCAR POR ID
+  // ============================================
   async buscarPorId(id) {
-    const [rows] = await pool.query(
-      `SELECT id, cedula, nombre, email, telefono, rol, departamento, activo, created_at
-       FROM usuarios
-       WHERE id = ?
-       LIMIT 1`,
+    const [rows] = await db.query(
+      `SELECT id, cedula, nombre, email, telefono, rol, departamento, activo, created_at 
+       FROM usuarios 
+       WHERE id = ?`,
       [id]
     );
     return rows[0] || null;
   },
 
-  /**
-   * Crear nuevo usuario
-   */
+  // ============================================
+  // CREAR USUARIO
+  // ============================================
   async crear({ cedula, nombre, email, telefono, password_hash, rol, departamento }) {
-    const [result] = await pool.query(
-      `INSERT INTO usuarios (cedula, nombre, email, telefono, password_hash, rol, departamento)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [cedula, nombre, email || null, telefono || null, password_hash, rol, departamento || null]
+    const [result] = await db.query(
+      `INSERT INTO usuarios 
+       (cedula, nombre, email, telefono, password_hash, rol, departamento, activo) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+      [cedula, nombre, email, telefono || null, password_hash, rol, departamento || null]
     );
     return result.insertId;
   },
 
-  /**
-   * Actualizar usuario existente
-   */
+  // ============================================
+  // ACTUALIZAR USUARIO
+  // ============================================
   async actualizar(id, { cedula, nombre, email, telefono, rol, departamento, activo, password_hash }) {
-    let query = `UPDATE usuarios SET 
-      cedula = ?,
-      nombre = ?,
-      email = ?,
-      telefono = ?,
-      rol = ?,
-      departamento = ?,
-      activo = ?
-    `;
-    const params = [cedula, nombre, email || null, telefono || null, rol, departamento || null, activo];
+    let query = 'UPDATE usuarios SET ';
+    const params = [];
+    const updates = [];
 
-    // Si se proporciona password_hash, actualizarlo
-    if (password_hash) {
-      query += `, password_hash = ?`;
+    if (cedula !== undefined) {
+      updates.push('cedula = ?');
+      params.push(cedula);
+    }
+    if (nombre !== undefined) {
+      updates.push('nombre = ?');
+      params.push(nombre);
+    }
+    if (email !== undefined) {
+      updates.push('email = ?');
+      params.push(email);
+    }
+    if (telefono !== undefined) {
+      updates.push('telefono = ?');
+      params.push(telefono);
+    }
+    if (rol !== undefined) {
+      updates.push('rol = ?');
+      params.push(rol);
+    }
+    if (departamento !== undefined) {
+      updates.push('departamento = ?');
+      params.push(departamento);
+    }
+    if (activo !== undefined) {
+      updates.push('activo = ?');
+      params.push(activo);
+    }
+    if (password_hash !== undefined && password_hash !== null) {
+      updates.push('password_hash = ?');
       params.push(password_hash);
     }
 
-    query += ` WHERE id = ?`;
+    if (updates.length === 0) {
+      return false;
+    }
+
+    query += updates.join(', ');
+    query += ' WHERE id = ?';
     params.push(id);
 
-    const [result] = await pool.query(query, params);
+    const [result] = await db.query(query, params);
     return result.affectedRows > 0;
   },
 
-  /**
-   * Listar usuarios (con filtro opcional por rol)
-   */
-  async listar({ rol } = {}) {
-    if (rol) {
-      const [rows] = await pool.query(
-        `SELECT id, cedula, nombre, email, telefono, rol, departamento, activo, created_at
-         FROM usuarios WHERE rol = ? ORDER BY nombre ASC`,
-        [rol]
-      );
-      return rows;
-    }
-    const [rows] = await pool.query(
-      `SELECT id, cedula, nombre, email, telefono, rol, departamento, activo, created_at
-       FROM usuarios ORDER BY nombre ASC`
-    );
-    return rows;
-  },
-
-  /**
-   * Cambiar estado de un usuario (activo/inactivo)
-   */
+  // ============================================
+  // CAMBIAR ESTADO (activo/inactivo)
+  // ============================================
   async toggleActivo(id) {
-    try {
-      const [result] = await pool.query(
-        'UPDATE usuarios SET activo = NOT activo WHERE id = ?',
-        [id]
-      );
-      return result.affectedRows > 0;
-    } catch (error) {
-      console.error('❌ ERROR en toggleActivo:', error.message);
-      throw error;
-    }
+    const [usuario] = await db.query(
+      `SELECT activo FROM usuarios WHERE id = ?`,
+      [id]
+    );
+
+    if (!usuario.length) return false;
+
+    const nuevoEstado = usuario[0].activo ? 0 : 1;
+
+    const [result] = await db.query(
+      `UPDATE usuarios SET activo = ? WHERE id = ?`,
+      [nuevoEstado, id]
+    );
+
+    return result.affectedRows > 0;
   },
 
-  /**
-   * Resetear contraseña de un usuario
-   */
-  async resetPassword(id, newPasswordHash) {
-    const [result] = await pool.query(
-      'UPDATE usuarios SET password_hash = ? WHERE id = ?',
-      [newPasswordHash, id]
+  // ============================================
+  // RESETEAR CONTRASEÑA
+  // ============================================
+  async resetPassword(id, password_hash) {
+    const [result] = await db.query(
+      `UPDATE usuarios SET password_hash = ? WHERE id = ?`,
+      [password_hash, id]
     );
     return result.affectedRows > 0;
   },
 
-  /**
-   * Eliminar un usuario
-   */
+  // ============================================
+  // ELIMINAR USUARIO
+  // ============================================
   async eliminar(id) {
-    const [result] = await pool.query(
-      'DELETE FROM usuarios WHERE id = ?',
+    const [result] = await db.query(
+      `DELETE FROM usuarios WHERE id = ?`,
       [id]
     );
     return result.affectedRows > 0;
-  },
-
-  /**
-   * Obtener evaluadores (solo los que tienen rol evaluador)
-   */
-  async getEvaluadores() {
-    const [rows] = await pool.query(
-      `SELECT id, cedula, nombre, email, telefono, rol, departamento, activo 
-       FROM usuarios 
-       WHERE rol = 'evaluador' 
-       ORDER BY nombre ASC`
-    );
-    return rows;
   }
 };
 
