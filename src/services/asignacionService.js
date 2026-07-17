@@ -56,7 +56,6 @@ const AsignacionService = {
     console.log("🔵 CREANDO ASIGNACION");
     console.log({ proyectoId, evaluadorId });
 
-    // 1. Verificar que el proyecto existe
     const [proyectos] = await db.query(
       `SELECT id, concurso_id FROM proyectos WHERE id = ?`,
       [proyectoId]
@@ -68,7 +67,6 @@ const AsignacionService = {
 
     const proyecto = proyectos[0];
 
-    // 2. Verificar que el evaluador existe
     const [evaluadores] = await db.query(
       `SELECT id FROM usuarios WHERE id = ? AND rol = 'evaluador'`,
       [evaluadorId]
@@ -78,74 +76,24 @@ const AsignacionService = {
       throw new Error('Evaluador no encontrado');
     }
 
-    // 3. Buscar si el proyecto tiene rúbrica
-    let [rubricas] = await db.query(
+    // La rúbrica del concurso debe existir y estar configurada
+    // (secciones/criterios/niveles) ANTES de poder asignar evaluadores.
+    // Ya no se auto-genera contenido de relleno: eso generaba criterios
+    // genéricos sin relación real con el concurso, y podía duplicar
+    // rúbricas violando el constraint único en rubricas.concurso_id.
+    const [rubricas] = await db.query(
       `SELECT id FROM rubricas WHERE concurso_id = ?`,
       [proyecto.concurso_id]
     );
 
-    let rubricaId;
-
     if (rubricas.length === 0) {
-      console.log('⚠️ El proyecto no tiene rúbrica, creando una automáticamente...');
-      
-      // 3a. Crear rúbrica por defecto
-      const [resultRubrica] = await db.query(`
-        INSERT INTO rubricas (concurso_id, nombre, puntaje_maximo, estado)
-        VALUES (?, ?, ?, ?)
-      `, [proyecto.concurso_id, `Rúbrica para concurso ${proyecto.concurso_id}`, 100, 'ACTIVA']);
-
-      rubricaId = resultRubrica.insertId;
-      console.log('✅ Rúbrica creada con ID:', rubricaId);
-
-      // 3b. Crear secciones por defecto
-      const secciones = [
-        { nombre: 'Contenido', orden: 1 },
-        { nombre: 'Presentación', orden: 2 },
-        { nombre: 'Originalidad', orden: 3 }
-      ];
-
-      for (const seccion of secciones) {
-        const [seccionResult] = await db.query(`
-          INSERT INTO secciones (concurso_id, nombre, orden)
-          VALUES (?, ?, ?)
-        `, [proyecto.concurso_id, seccion.nombre, seccion.orden]);
-
-        // 3c. Crear criterios por defecto para cada sección
-        const criterios = [
-          { texto: `Calidad del ${seccion.nombre}`, orden: 1 },
-          { texto: `Relevancia del ${seccion.nombre}`, orden: 2 }
-        ];
-
-        for (const criterio of criterios) {
-          await db.query(`
-            INSERT INTO criterios (seccion_id, rubrica_id, texto, orden)
-            VALUES (?, ?, ?, ?)
-          `, [seccionResult.insertId, rubricaId, criterio.texto, criterio.orden]);
-        }
-      }
-
-      // 3d. Crear niveles por defecto
-      const niveles = [
-        { nombre: 'Bajo', puntaje: 1 },
-        { nombre: 'Medio', puntaje: 2 },
-        { nombre: 'Alto', puntaje: 3 }
-      ];
-
-      for (const nivel of niveles) {
-        await db.query(`
-          INSERT INTO niveles (concurso_id, nombre, puntaje)
-          VALUES (?, ?, ?)
-        `, [proyecto.concurso_id, nivel.nombre, nivel.puntaje]);
-      }
-
-      console.log('✅ Rúbrica completa creada automáticamente');
-    } else {
-      rubricaId = rubricas[0].id;
-      console.log('✅ Rúbrica existente encontrada con ID:', rubricaId);
+      throw new Error(
+        'Este concurso no tiene una rúbrica configurada. Ve a Rúbricas → Configurar contenido antes de asignar evaluadores.'
+      );
     }
 
-    // 4. Verificar si ya existe la asignación
+    const rubricaId = rubricas[0].id;
+
     const [existe] = await db.query(
       `SELECT id FROM evaluaciones WHERE proyecto_id = ? AND evaluador_id = ?`,
       [proyectoId, evaluadorId]
@@ -155,7 +103,6 @@ const AsignacionService = {
       throw new Error('Ya existe una evaluación para este proyecto y evaluador');
     }
 
-    // 5. Insertar en la tabla asignaciones
     const [resultAsignacion] = await db.query(`
       INSERT INTO asignaciones (proyecto_id, evaluador_id, estado)
       VALUES (?, ?, 'asignado')
@@ -163,7 +110,6 @@ const AsignacionService = {
 
     console.log('✅ Asignación creada con ID:', resultAsignacion.insertId);
 
-    // 6. Insertar en la tabla evaluaciones
     const [resultEvaluacion] = await db.query(`
       INSERT INTO evaluaciones (proyecto_id, evaluador_id, rubrica_id, estado, fecha_asignacion)
       VALUES (?, ?, ?, 'asignado', NOW())
