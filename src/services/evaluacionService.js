@@ -418,7 +418,249 @@ const EvaluacionService = {
   } finally {
     connection.release();
   }
-}
+},
+/**
+ * REABRIR EVALUACIÓN (ADMIN)
+ * Permite al administrador resetear una evaluación para que el evaluador pueda volver a evaluar
+ */
+  async reabrirEvaluacion(evaluacionId) {
+    const [evaluacion] = await db.query(
+      `SELECT estado FROM evaluaciones WHERE id = ?`,
+      [evaluacionId]
+    );
+
+    if (!evaluacion.length) {
+      throw new Error('Evaluación no encontrada');
+    }
+
+    // Solo se puede reabrir si está evaluada
+    if (evaluacion[0].estado !== 'evaluado') {
+      throw new Error('Solo se pueden reabrir evaluaciones ya completadas');
+    }
+
+    // Resetear estado y eliminar detalles
+    await db.query(
+      `UPDATE evaluaciones 
+      SET estado = 'asignado', 
+          fecha_evaluacion = NULL, 
+          observaciones = NULL 
+      WHERE id = ?`,
+      [evaluacionId]
+    );
+
+    // Eliminar detalles de evaluación
+    await db.query(
+      `DELETE FROM detalles_evaluacion WHERE evaluacion_id = ?`,
+      [evaluacionId]
+    );
+
+    return { 
+      ok: true, 
+      mensaje: 'Evaluación reabierta correctamente. El evaluador puede volver a evaluar.' 
+    };
+  },
+
+/**
+ * ELIMINAR EVALUACIÓN COMPLETA (ADMIN)
+ * Elimina completamente una evaluación y sus detalles
+ */
+  async eliminarEvaluacion(evaluacionId) {
+    const [evaluacion] = await db.query(
+      `SELECT id FROM evaluaciones WHERE id = ?`,
+      [evaluacionId]
+    );
+
+    if (!evaluacion.length) {
+      throw new Error('Evaluación no encontrada');
+    }
+
+    // Iniciar transacción
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      // Eliminar detalles primero
+      await connection.query(
+        `DELETE FROM detalles_evaluacion WHERE evaluacion_id = ?`,
+        [evaluacionId]
+      );
+
+      // Eliminar evaluación
+      await connection.query(
+        `DELETE FROM evaluaciones WHERE id = ?`,
+        [evaluacionId]
+      );
+
+      await connection.commit();
+      return { 
+        ok: true, 
+        mensaje: 'Evaluación eliminada correctamente' 
+      };
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  },
+
+/**
+ * OBTENER DETALLE DE EVALUACIÓN PARA EDICIÓN
+ * Retorna los detalles guardados para que el evaluador pueda ver sus respuestas anteriores
+ */
+  async getDetalleEvaluacionParaEdicion(evaluacionId) {
+    const [evaluacion] = await db.query(
+      `SELECT 
+        e.id,
+        e.proyecto_id,
+        e.evaluador_id,
+        e.estado,
+        e.observaciones,
+        p.nombre AS proyecto_nombre,
+        u.nombre AS evaluador_nombre
+      FROM evaluaciones e
+      JOIN proyectos p ON e.proyecto_id = p.id
+      JOIN usuarios u ON e.evaluador_id = u.id
+      WHERE e.id = ?`,
+      [evaluacionId]
+    );
+
+    if (!evaluacion.length) {
+      throw new Error('Evaluación no encontrada');
+    }
+
+    // Obtener detalles guardados
+    const [detalles] = await db.query(
+      `SELECT 
+        de.id,
+        de.criterio_id,
+        de.nivel_id,
+        c.texto AS criterio_texto,
+        c.seccion_id,
+        n.texto AS nivel_texto,
+        n.puntaje AS nivel_puntaje,
+        s.nombre AS seccion_nombre
+      FROM detalles_evaluacion de
+      JOIN criterios c ON de.criterio_id = c.id
+      JOIN niveles n ON de.nivel_id = n.id
+      JOIN secciones s ON c.seccion_id = s.id
+      WHERE de.evaluacion_id = ?`,
+      [evaluacionId]
+    );
+
+    // Agrupar por sección
+    const seccionesMap = {};
+    detalles.forEach(d => {
+      if (!seccionesMap[d.seccion_nombre]) {
+        seccionesMap[d.seccion_nombre] = {
+          seccion_id: d.seccion_id,
+          nombre: d.seccion_nombre,
+          items: []
+        };
+      }
+      seccionesMap[d.seccion_nombre].items.push({
+        criterio_id: d.criterio_id,
+        criterio_texto: d.criterio_texto,
+        nivel_id: d.nivel_id,
+        nivel_texto: d.nivel_texto,
+        nivel_puntaje: d.nivel_puntaje
+      });
+    });
+
+    return {
+      ok: true,
+      data: {
+        evaluacion_id: evaluacion[0].id,
+        proyecto_id: evaluacion[0].proyecto_id,
+        proyecto_nombre: evaluacion[0].proyecto_nombre,
+        evaluador_nombre: evaluacion[0].evaluador_nombre,
+        estado: evaluacion[0].estado,
+        observaciones: evaluacion[0].observaciones || '',
+        secciones: Object.values(seccionesMap)
+      }
+    };
+  },
+
+/**
+ * ACTUALIZAR EVALUACIÓN EXISTENTE (EVALUADOR)
+ * Permite al evaluador modificar sus respuestas
+ */
+  async actualizarEvaluacion({ evaluacionId, observacion, detalles }) {
+    // Verificar que la evaluación existe y está en estado asignado
+    const [evaluacion] = await db.query(
+      `SELECT estado FROM evaluaciones WHERE id = ?`,
+      [evaluacionId]
+    );
+
+    if (!evaluacion.length) {
+      throw new Error('Evaluación no encontrada');
+    }
+
+    if (evaluacion[0].estado === 'evaluado') {
+      throw new Error('Esta evaluación ya fue completada y no puede ser editada');
+    }
+
+    // Actualizar observaciones
+    await db.query(
+      `UPDATE evaluaciones 
+      SET observaciones = ?, fecha_evaluacion = NOW() 
+      WHERE id = ?`,
+      [observacion, evaluacionId]
+    );
+
+    // Eliminar detalles anteriores
+    await db.query(
+      `DELETE FROM detalles_evaluacion WHERE evaluacion_id = ?`,
+      [evaluacionId]
+    );
+
+    // Insertar nuevos detalles
+    for (const d of detalles) {
+      await db.query(
+        `INSERT INTO detalles_evaluacion (evaluacion_id, criterio_id, nivel_id)
+        VALUES (?, ?, ?)`,
+        [evaluacionId, d.criterio_id, d.nivel_id]
+      );
+    }
+
+    // NOTA: No cambiamos el estado a 'evaluado' hasta que el evaluador decida finalizar
+    return { 
+      ok: true, 
+      mensaje: 'Evaluación actualizada correctamente' 
+    };
+  },
+
+  /**
+   * FINALIZAR EVALUACIÓN (EVALUADOR)
+   * Cambia el estado de 'asignado' a 'evaluado'
+   */
+  async finalizarEvaluacion(evaluacionId) {
+    const [evaluacion] = await db.query(
+      `SELECT estado FROM evaluaciones WHERE id = ?`,
+      [evaluacionId]
+    );
+
+    if (!evaluacion.length) {
+      throw new Error('Evaluación no encontrada');
+    }
+
+    if (evaluacion[0].estado === 'evaluado') {
+      throw new Error('Esta evaluación ya fue finalizada');
+    }
+
+    await db.query(
+      `UPDATE evaluaciones 
+      SET estado = 'evaluado', 
+          fecha_evaluacion = NOW() 
+      WHERE id = ?`,
+      [evaluacionId]
+    );
+
+    return { 
+      ok: true, 
+      mensaje: 'Evaluación finalizada correctamente' 
+    };
+  }
 };
 
 module.exports = EvaluacionService;
