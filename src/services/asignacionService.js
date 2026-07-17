@@ -42,7 +42,7 @@ const AsignacionService = {
     const [rows] = await db.query(`
       SELECT id, nombre
       FROM usuarios
-      WHERE rol = 'evaluador'
+      WHERE rol = 'evaluador' AND activo = 1
       ORDER BY nombre
     `);
 
@@ -50,7 +50,7 @@ const AsignacionService = {
   },
 
   // ==========================
-  // CREAR ASIGNACIÓN - CON LOGS
+  // CREAR ASIGNACIÓN - CON LOGS DETALLADOS
   // ==========================
   async crear(proyectoId, evaluadorId) {
     console.log("========================================");
@@ -79,12 +79,12 @@ const AsignacionService = {
     // PASO 2: Buscar el evaluador
     console.log("🔍 PASO 2: Buscando evaluador...");
     const [evaluadores] = await db.query(
-      `SELECT id FROM usuarios WHERE id = ? AND rol = 'evaluador'`,
+      `SELECT id FROM usuarios WHERE id = ? AND rol = 'evaluador' AND activo = 1`,
       [evaluadorId]
     );
 
     if (evaluadores.length === 0) {
-      console.log("❌ Evaluador no encontrado");
+      console.log("❌ Evaluador no encontrado o inactivo");
       throw new Error('Evaluador no encontrado');
     }
     console.log("✅ Evaluador encontrado:", evaluadores[0]);
@@ -98,11 +98,12 @@ const AsignacionService = {
 
     console.log("📊 Rúbricas encontradas:", rubricas.length);
     if (rubricas.length > 0) {
-      console.log("   - Rúbrica ID:", rubricas[0].id);
-      console.log("   - Rúbrica Nombre:", rubricas[0].nombre);
+      console.log("   ✅ Rúbrica encontrada:");
+      console.log("   - ID:", rubricas[0].id);
+      console.log("   - Nombre:", rubricas[0].nombre);
       console.log("   - Concurso ID:", rubricas[0].concurso_id);
     } else {
-      console.log("   ❌ No se encontraron rúbricas para este concurso");
+      console.log("   ❌ NO se encontraron rúbricas para este concurso");
       console.log("   ⚠️  Esto es lo que causa el error 'El proyecto no tiene rúbrica'");
     }
 
@@ -121,13 +122,14 @@ const AsignacionService = {
 
     console.log("📊 Secciones encontradas:", secciones.length);
     if (secciones.length > 0) {
-      console.log("   - Primeras 3 secciones:");
+      console.log("   ✅ La rúbrica tiene secciones:");
       secciones.slice(0, 3).forEach((s, i) => {
         console.log(`     ${i+1}. ID: ${s.id} - Nombre: ${s.nombre}`);
       });
     } else {
       console.log("   ❌ La rúbrica NO tiene secciones configuradas");
       console.log("   ⚠️  Esto causará error si se intenta evaluar");
+      throw new Error('La rúbrica no tiene secciones configuradas. Ve a Rúbricas → Configurar contenido primero.');
     }
 
     // PASO 5: Verificar si ya existe asignación

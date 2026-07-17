@@ -1,7 +1,108 @@
 const AsignacionService = require('../services/asignacionService');
+const db = require('../config/db');
 
 const controller = {
 
+  // ============================================
+  // 🔬 RUTA DE DIAGNÓSTICO - PARA DEBUG
+  // ============================================
+  async diagnosticar(req, res) {
+    try {
+      console.log("========================================");
+      console.log("🔬 DIAGNÓSTICO DE ASIGNACIÓN");
+      console.log("========================================");
+      
+      const { proyectoId } = req.query;
+      
+      if (!proyectoId) {
+        return res.status(400).json({
+          ok: false,
+          mensaje: 'Falta proyectoId'
+        });
+      }
+
+      console.log("📌 Proyecto ID a diagnosticar:", proyectoId);
+
+      // 1. Verificar proyecto
+      const [proyectos] = await db.query(
+        `SELECT id, nombre, concurso_id FROM proyectos WHERE id = ?`,
+        [proyectoId]
+      );
+
+      if (proyectos.length === 0) {
+        return res.json({
+          ok: false,
+          mensaje: 'Proyecto no encontrado',
+          paso: 1
+        });
+      }
+
+      const proyecto = proyectos[0];
+      console.log("✅ Proyecto encontrado:", proyecto);
+
+      // 2. Verificar rúbrica
+      const [rubricas] = await db.query(
+        `SELECT id, nombre, concurso_id FROM rubricas WHERE concurso_id = ?`,
+        [proyecto.concurso_id]
+      );
+
+      console.log("📊 Rúbricas encontradas:", rubricas.length);
+      
+      let rubricaInfo = null;
+      let tieneSecciones = false;
+      
+      if (rubricas.length > 0) {
+        rubricaInfo = rubricas[0];
+        console.log("✅ Rúbrica encontrada:", rubricaInfo);
+        
+        // 3. Verificar secciones
+        const [secciones] = await db.query(
+          `SELECT id, nombre FROM secciones WHERE rubrica_id = ?`,
+          [rubricaInfo.id]
+        );
+        console.log("📊 Secciones encontradas:", secciones.length);
+        tieneSecciones = secciones.length > 0;
+        rubricaInfo.secciones = secciones.length;
+      } else {
+        console.log("❌ NO hay rúbrica para el concurso ID:", proyecto.concurso_id);
+      }
+
+      // 4. Verificar evaluadores
+      const [evaluadores] = await db.query(
+        `SELECT id, nombre, rol FROM usuarios WHERE rol = 'evaluador' AND activo = 1`
+      );
+      console.log("📊 Evaluadores disponibles:", evaluadores.length);
+
+      return res.json({
+        ok: true,
+        data: {
+          proyecto: {
+            id: proyecto.id,
+            nombre: proyecto.nombre,
+            concurso_id: proyecto.concurso_id
+          },
+          rubrica: rubricaInfo || null,
+          tieneRubrica: rubricas.length > 0,
+          tieneSecciones: tieneSecciones,
+          evaluadores: evaluadores.map(e => ({
+            id: e.id,
+            nombre: e.nombre
+          }))
+        }
+      });
+
+    } catch (error) {
+      console.error("❌ Error en diagnóstico:", error);
+      return res.status(500).json({
+        ok: false,
+        mensaje: 'Error en diagnóstico: ' + error.message
+      });
+    }
+  },
+
+  // ============================================
+  // LISTAR ASIGNACIONES
+  // ============================================
   async listar(req, res) {
     try {
       const data = await AsignacionService.getAsignaciones();
@@ -20,6 +121,9 @@ const controller = {
     }
   },
 
+  // ============================================
+  // LISTAR PROYECTOS
+  // ============================================
   async proyectos(req, res) {
     try {
       const data = await AsignacionService.getProyectos();
@@ -38,6 +142,9 @@ const controller = {
     }
   },
 
+  // ============================================
+  // LISTAR EVALUADORES
+  // ============================================
   async evaluadores(req, res) {
     try {
       const data = await AsignacionService.getEvaluadores();
@@ -56,6 +163,9 @@ const controller = {
     }
   },
 
+  // ============================================
+  // CREAR ASIGNACIÓN - CON LOGS DETALLADOS
+  // ============================================
   async crear(req, res) {
     try {
       console.log("========================================");
@@ -138,6 +248,9 @@ const controller = {
     }
   },
 
+  // ============================================
+  // ELIMINAR ASIGNACIÓN
+  // ============================================
   async eliminar(req, res) {
     try {
       await AsignacionService.eliminar(req.params.id);
