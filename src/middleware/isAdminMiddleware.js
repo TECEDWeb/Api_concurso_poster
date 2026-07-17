@@ -1,4 +1,7 @@
-// middleware/isAdminMiddleware.js
+/**
+ * Middleware para verificar si el usuario es administrador
+ * Debe usarse DESPUÉS de authMiddleware
+ */
 function isAdminMiddleware(req, res, next) {
   try {
     const usuario = req.usuario;
@@ -30,4 +33,5 @@ function isAdminMiddleware(req, res, next) {
   }
 }
 
+// ✅ EXPORTACIÓN CORRECTA - como función
 module.exports = isAdminMiddleware;

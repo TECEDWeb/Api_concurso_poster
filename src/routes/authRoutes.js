@@ -11,7 +11,8 @@ router.post('/register', authController.registrar);
 router.post('/olvide-password', authController.olvidePassword);
 router.post('/resetear-password', authController.resetearPassword);
 
-// Protegido: requiere token válido
+// ✅ Protegido: requiere token válido
+// authMiddleware es una función, NO un objeto
 router.get('/perfil', authMiddleware, authController.perfil);
 
 module.exports = router;
