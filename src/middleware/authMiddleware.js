@@ -1,9 +1,5 @@
 const authService = require('../services/authService');
 
-/**
- * Middleware de autenticación
- * Verifica que el token sea válido y extrae el usuario
- */
 function authMiddleware(req, res, next) {
   console.log('🟡 HEADERS RECIBIDOS:', req.headers.authorization);
 
@@ -18,7 +14,7 @@ function authMiddleware(req, res, next) {
   }
 
   const token = authHeader.split(' ')[1];
-  console.log('🟢 TOKEN EXTRAÍDO:', token);
+  console.log('🟢 TOKEN EXTRAÍDO');
 
   try {
     const payload = authService.verificarToken(token);
@@ -35,5 +31,4 @@ function authMiddleware(req, res, next) {
   }
 }
 
-// ✅ EXPORTACIÓN CORRECTA - como función
 module.exports = authMiddleware;

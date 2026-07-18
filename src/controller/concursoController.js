@@ -2,9 +2,6 @@ const concursoModel = require('../model/concursoModel');
 
 const concursoController = {
 
-  /**
-   * LISTAR CONCURSOS
-   */
   async listar(req, res) {
     try {
       console.log('📥 GET /concursos');
@@ -14,7 +11,6 @@ const concursoController = {
         ok: true,
         data: concursos
       });
-
     } catch (error) {
       console.error('❌ ERROR listar concursos:', error);
       return res.status(500).json({
@@ -24,9 +20,6 @@ const concursoController = {
     }
   },
 
-  /**
-   * OBTENER CONCURSO POR ID
-   */
   async obtenerPorId(req, res) {
     try {
       const id = parseInt(req.params.id);
@@ -45,7 +38,6 @@ const concursoController = {
         ok: true,
         data: concurso
       });
-
     } catch (error) {
       console.error('❌ ERROR obtener concurso:', error);
       return res.status(500).json({
@@ -55,16 +47,12 @@ const concursoController = {
     }
   },
 
-  /**
-   * CREAR CONCURSO
-   */
   async crear(req, res) {
     try {
       console.log('📥 POST /concursos', req.body);
 
       const { nombre, descripcion, tipo, fecha_inicio, fecha_fin, puntaje_maximo, activo } = req.body;
 
-      // Validaciones
       if (!nombre || nombre.trim() === '') {
         return res.status(400).json({
           ok: false,
@@ -89,7 +77,6 @@ const concursoController = {
         mensaje: 'Concurso creado correctamente',
         data: concursoCreado
       });
-
     } catch (error) {
       console.error('❌ ERROR crear concurso:', error);
       return res.status(500).json({
@@ -99,9 +86,6 @@ const concursoController = {
     }
   },
 
-  /**
-   * ACTUALIZAR CONCURSO
-   */
   async actualizar(req, res) {
     try {
       const id = parseInt(req.params.id);
@@ -109,7 +93,6 @@ const concursoController = {
 
       const { nombre, descripcion, tipo, fecha_inicio, fecha_fin, puntaje_maximo, activo } = req.body;
 
-      // Verificar si existe
       const existe = await concursoModel.buscarPorId(id);
       if (!existe) {
         return res.status(404).json({
@@ -118,7 +101,6 @@ const concursoController = {
         });
       }
 
-      // Validaciones
       if (!nombre || nombre.trim() === '') {
         return res.status(400).json({
           ok: false,
@@ -143,7 +125,6 @@ const concursoController = {
         mensaje: 'Concurso actualizado correctamente',
         data: concursoActualizado
       });
-
     } catch (error) {
       console.error('❌ ERROR actualizar concurso:', error);
       return res.status(500).json({
@@ -153,15 +134,11 @@ const concursoController = {
     }
   },
 
-  /**
-   * ELIMINAR CONCURSO
-   */
   async eliminar(req, res) {
     try {
       const id = parseInt(req.params.id);
       console.log('📥 DELETE /concursos/' + id);
 
-      // Verificar si existe
       const existe = await concursoModel.buscarPorId(id);
       if (!existe) {
         return res.status(404).json({
@@ -176,7 +153,6 @@ const concursoController = {
         ok: true,
         mensaje: 'Concurso eliminado correctamente'
       });
-
     } catch (error) {
       console.error('❌ ERROR eliminar concurso:', error);
       return res.status(500).json({

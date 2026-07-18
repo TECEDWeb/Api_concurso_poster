@@ -18,9 +18,6 @@ const criterioRoutes = require('./routes/criterioRoutes');
 const nivelRoutes = require('./routes/nivelRoutes');
 const app = express();
 
-// =========================
-// MIDDLEWARE CORS
-// =========================
 app.use(cors({
   origin: [
     'http://localhost:8100',
@@ -36,9 +33,6 @@ app.use(cors({
 app.options('*', cors());
 app.use(express.json());
 
-// =========================
-// RUTAS API
-// =========================
 app.use('/api/auth', authRoutes);
 app.use('/api/usuarios', usuarioRoutes);
 app.use('/api/proyectos', proyectoRoutes);
@@ -54,9 +48,6 @@ app.use('/api/secciones', seccionesRoutes);
 app.use('/api/criterios', criterioRoutes);
 app.use('/api/niveles', nivelRoutes);
 
-// =========================
-// HEALTH CHECK
-// =========================
 app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
@@ -64,9 +55,6 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// =========================
-// ROOT API INFO
-// =========================
 app.get('/api', (req, res) => {
   res.json({
     ok: true,
@@ -87,13 +75,8 @@ app.get('/api', (req, res) => {
   });
 });
 
-// =========================
-// SERVER
-// =========================
 const PORT = process.env.PORT || 3000;
 
-// Protegido con try/catch: si el correo falla al verificar,
-// solo se registra el error, nunca debe tumbar el servidor completo.
 try {
   verificarConexionCorreo();
 } catch (error) {

@@ -1,6 +1,4 @@
 function roleMiddleware(rolesPermitidos) {
-  // Si viene como array, usarlo directamente
-  // Si viene como string, convertirlo a array
   const roles = Array.isArray(rolesPermitidos) ? rolesPermitidos : [rolesPermitidos];
   
   return (req, res, next) => {
@@ -13,7 +11,7 @@ function roleMiddleware(rolesPermitidos) {
       console.log('🔴 No existe req.usuario');
       return res.status(401).json({
         ok: false,
-        mensaje: 'No autenticado.',
+        mensaje: 'No autenticado.'
       });
     }
 
@@ -21,7 +19,7 @@ function roleMiddleware(rolesPermitidos) {
       console.log('🔴 Rol rechazado');
       return res.status(403).json({
         ok: false,
-        mensaje: 'No tienes permiso para acceder a este recurso.',
+        mensaje: 'No tienes permiso para acceder a este recurso.'
       });
     }
 

@@ -5,9 +5,6 @@ const { enviarCorreoRecuperacion } = require('../config/mailer');
 
 const authController = {
 
-  /**
-   * POST /api/auth/registrar
-   */
   async registrar(req, res) {
     try {
       const { cedula, nombre, email, password, rol, departamento } = req.body;
@@ -54,7 +51,6 @@ const authController = {
 
     } catch (error) {
       console.error('Error registrar:', error);
-
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al crear usuario'
@@ -62,10 +58,6 @@ const authController = {
     }
   },
 
-
-  /**
-   * POST /api/auth/login
-   */
   async login(req, res) {
     try {
       const { cedula, password } = req.body;
@@ -124,7 +116,6 @@ const authController = {
 
     } catch (error) {
       console.error('Error login:', error);
-
       return res.status(500).json({
         ok: false,
         mensaje: 'Error interno del servidor'
@@ -132,10 +123,6 @@ const authController = {
     }
   },
 
-
-  /**
-   * GET /api/auth/perfil
-   */
   async perfil(req, res) {
     try {
       const usuario = await usuarioModel.buscarPorId(req.usuario.id);
@@ -154,7 +141,6 @@ const authController = {
 
     } catch (error) {
       console.error('Error perfil:', error);
-
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al obtener perfil'
@@ -162,14 +148,6 @@ const authController = {
     }
   },
 
-
-  /**
-   * POST /api/auth/olvide-password
-   * Body: { email }
-   * Público. Genera un token de recuperación y envía el correo.
-   * Siempre responde con el mismo mensaje genérico (exista o no el
-   * correo) para no revelar qué correos están registrados en el sistema.
-   */
   async olvidePassword(req, res) {
     try {
       const { email } = req.body;
@@ -194,21 +172,19 @@ const authController = {
 
       const usuario = usuarios[0];
       const token = authService.generarTokenReset();
-      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
 
       await db.query(
         'INSERT INTO password_resets (usuario_id, token, expires_at) VALUES (?, ?, ?)',
         [usuario.id, token, expiresAt]
       );
 
-      // 👇 Único cambio: apunta a la página fusionada /recuperar-password
       const enlace = `${process.env.FRONTEND_URL}/recuperar-password?token=${token}`;
 
       try {
         await enviarCorreoRecuperacion(usuario.email, usuario.nombre, enlace);
       } catch (mailError) {
         console.error('❌ Error enviando correo de recuperación:', mailError);
-        // No revelamos el fallo de envío al usuario final; queda registrado en logs.
       }
 
       return res.json(respuestaGenerica);
@@ -219,12 +195,6 @@ const authController = {
     }
   },
 
-
-  /**
-   * POST /api/auth/resetear-password
-   * Body: { token, nuevaPassword }
-   * Público. Valida el token de recuperación y actualiza la contraseña.
-   */
   async resetearPassword(req, res) {
     try {
       const { token, nuevaPassword } = req.body;

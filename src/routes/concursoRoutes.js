@@ -4,42 +4,10 @@ const controller = require('../controller/concursoController');
 const authMiddleware = require('../middleware/authMiddleware');
 const roleMiddleware = require('../middleware/roleMiddleware');
 
-// LISTAR CONCURSOS (solo autenticación, sin roles específicos)
-router.get(
-  '/',
-  authMiddleware,
-  controller.listar
-);
-
-// OBTENER POR ID (solo autenticación)
-router.get(
-  '/:id',
-  authMiddleware,
-  controller.obtenerPorId
-);
-
-// CREAR CONCURSO (admin)
-router.post(
-  '/',
-  authMiddleware,
-  roleMiddleware('admin'), // ← CORRECTO: pasar string, no array
-  controller.crear
-);
-
-// ACTUALIZAR CONCURSO (admin)
-router.put(
-  '/:id',
-  authMiddleware,
-  roleMiddleware('admin'), // ← CORRECTO: pasar string, no array
-  controller.actualizar
-);
-
-// ELIMINAR CONCURSO (admin)
-router.delete(
-  '/:id',
-  authMiddleware,
-  roleMiddleware('admin'), // ← CORRECTO: pasar string, no array
-  controller.eliminar
-);
+router.get('/', authMiddleware, controller.listar);
+router.get('/:id', authMiddleware, controller.obtenerPorId);
+router.post('/', authMiddleware, roleMiddleware('admin'), controller.crear);
+router.put('/:id', authMiddleware, roleMiddleware('admin'), controller.actualizar);
+router.delete('/:id', authMiddleware, roleMiddleware('admin'), controller.eliminar);
 
 module.exports = router;

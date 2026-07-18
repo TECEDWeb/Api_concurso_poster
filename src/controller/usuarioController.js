@@ -4,9 +4,6 @@ const bcrypt = require('bcrypt');
 
 const usuarioController = {
 
-  /**
-   * LISTAR TODOS LOS USUARIOS
-   */
   async listar(req, res) {
     try {
       const { rol } = req.query;
@@ -16,7 +13,6 @@ const usuarioController = {
         ok: true,
         usuarios: Array.isArray(usuarios) ? usuarios : []
       });
-
     } catch (err) {
       console.error('ERROR listar usuarios:', err.message);
       return res.status(500).json({
@@ -26,9 +22,6 @@ const usuarioController = {
     }
   },
 
-  /**
-   * LISTAR SOLO EVALUADORES
-   */
   async getEvaluadores(req, res) {
     try {
       console.log('GET EVALUADORES');
@@ -38,7 +31,6 @@ const usuarioController = {
         ok: true,
         data: evaluadores
       });
-
     } catch (err) {
       console.error('ERROR getEvaluadores:', err.message);
       return res.status(500).json({
@@ -48,9 +40,6 @@ const usuarioController = {
     }
   },
 
-  /**
-   * CREAR USUARIO
-   */
   async create(req, res) {
     try {
       console.log('CREATE USUARIO:', req.body);
@@ -64,7 +53,6 @@ const usuarioController = {
         });
       }
 
-      // Verificar si la cédula ya existe
       const existe = await usuarioModel.buscarPorCedula(cedula);
       if (existe) {
         return res.status(400).json({
@@ -73,7 +61,6 @@ const usuarioController = {
         });
       }
 
-      // Hashear contraseña
       const saltRounds = 10;
       const password_hash = await bcrypt.hash(password, saltRounds);
 
@@ -98,7 +85,6 @@ const usuarioController = {
           rol
         }
       });
-
     } catch (err) {
       console.error('ERROR create usuario:', err.message);
       return res.status(500).json({
@@ -108,18 +94,13 @@ const usuarioController = {
     }
   },
 
-  /**
-   * ACTUALIZAR USUARIO (PUT)
-   */
   async actualizar(req, res) {
     try {
       const { id } = req.params;
       const { cedula, nombre, email, telefono, rol, departamento, activo, password } = req.body;
 
       console.log('🔵 ACTUALIZAR USUARIO ID:', id);
-      console.log('📦 Datos:', { cedula, nombre, email, telefono, rol, departamento, activo });
 
-      // Verificar si el usuario existe
       const usuarioExistente = await usuarioModel.buscarPorId(id);
       if (!usuarioExistente) {
         return res.status(404).json({
@@ -128,7 +109,6 @@ const usuarioController = {
         });
       }
 
-      // Si se cambia la cédula, verificar que no exista otra
       if (cedula && cedula !== usuarioExistente.cedula) {
         const existe = await usuarioModel.buscarPorCedula(cedula);
         if (existe) {
@@ -139,7 +119,6 @@ const usuarioController = {
         }
       }
 
-      // Preparar datos para actualizar
       let password_hash = null;
       if (password && password.trim() !== '') {
         const saltRounds = 10;
@@ -164,7 +143,6 @@ const usuarioController = {
         });
       }
 
-      // Obtener el usuario actualizado
       const usuarioActualizado = await usuarioModel.buscarPorId(id);
 
       return res.json({
@@ -172,7 +150,6 @@ const usuarioController = {
         mensaje: 'Usuario actualizado correctamente',
         data: usuarioActualizado
       });
-
     } catch (err) {
       console.error('ERROR actualizar usuario:', err.message);
       return res.status(500).json({
@@ -182,15 +159,11 @@ const usuarioController = {
     }
   },
 
-  /**
-   * CAMBIAR ESTADO (activo/inactivo) - Soporta PUT y PATCH
-   */
   async toggleActivo(req, res) {
     try {
       const { id } = req.params;
       console.log('🔄 Cambiando estado del usuario ID:', id);
 
-      // Verificar si el usuario existe
       const usuarioExistente = await usuarioModel.buscarPorId(id);
       if (!usuarioExistente) {
         return res.status(404).json({
@@ -199,7 +172,6 @@ const usuarioController = {
         });
       }
 
-      // Cambiar estado
       const actualizado = await usuarioModel.toggleActivo(id);
 
       if (!actualizado) {
@@ -209,7 +181,6 @@ const usuarioController = {
         });
       }
 
-      // Obtener el usuario actualizado
       const usuarioActualizado = await usuarioModel.buscarPorId(id);
 
       return res.json({
@@ -221,7 +192,6 @@ const usuarioController = {
           activo: usuarioActualizado.activo
         }
       });
-
     } catch (err) {
       console.error('ERROR toggleActivo:', err.message);
       return res.status(500).json({
@@ -231,11 +201,6 @@ const usuarioController = {
     }
   },
 
-  /**
-   * RESETEAR CONTRASEÑA
-   * Body opcional: { nuevaPassword } — si se envía, se usa esa;
-   * si no, se genera una aleatoria segura.
-   */
   async resetPassword(req, res) {
     try {
       const { id } = req.params;
@@ -259,8 +224,6 @@ const usuarioController = {
           });
         }
       } else {
-        // Genera una contraseña aleatoria de 10 caracteres, legible
-        // (evita caracteres ambiguos como 0/O, 1/l)
         const alfabeto = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
         passwordFinal = Array.from({ length: 10 }, () =>
           alfabeto[Math.floor(Math.random() * alfabeto.length)]
@@ -286,7 +249,6 @@ const usuarioController = {
           nuevaPassword: passwordFinal
         }
       });
-
     } catch (err) {
       console.error('ERROR resetPassword:', err.message);
       return res.status(500).json({
@@ -296,14 +258,10 @@ const usuarioController = {
     }
   },
 
-  /**
-   * ELIMINAR USUARIO
-   */
   async eliminar(req, res) {
     try {
       const { id } = req.params;
 
-      // Verificar si el usuario existe
       const usuarioExistente = await usuarioModel.buscarPorId(id);
       if (!usuarioExistente) {
         return res.status(404).json({
@@ -312,7 +270,6 @@ const usuarioController = {
         });
       }
 
-      // No permitir eliminar al propio usuario
       if (id == req.usuario.id) {
         return res.status(400).json({
           ok: false,
@@ -333,7 +290,6 @@ const usuarioController = {
         ok: true,
         mensaje: 'Usuario eliminado correctamente'
       });
-
     } catch (err) {
       console.error('ERROR eliminar usuario:', err.message);
       return res.status(500).json({
@@ -343,9 +299,6 @@ const usuarioController = {
     }
   },
 
-  /**
-   * BUSCAR POR ID
-   */
   async getById(req, res) {
     try {
       const { id } = req.params;
@@ -363,7 +316,6 @@ const usuarioController = {
         ok: true,
         data: usuario
       });
-
     } catch (err) {
       console.error('ERROR getById:', err.message);
       return res.status(500).json({

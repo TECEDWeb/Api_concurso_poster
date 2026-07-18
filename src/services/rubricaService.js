@@ -1,11 +1,8 @@
 const db = require('../config/db');
-const ExcelJS = require('exceljs'); // ← Asegurar que está instalado
+const ExcelJS = require('exceljs');
 
 const RubricaService = {
 
-  // =========================
-  // LISTAR RÚBRICAS
-  // =========================
   async listar() {
     try {
       console.log('📋 listar: Iniciando...');
@@ -49,9 +46,6 @@ const RubricaService = {
     }
   },
 
-  // =========================
-  // OBTENER RÚBRICA POR CONCURSO
-  // =========================
   async obtener(concursoId) {
     try {
       console.log(`🔍 obtener: Buscando rúbrica para concurso ${concursoId}`);
@@ -93,15 +87,12 @@ const RubricaService = {
     }
   },
 
-  // =========================
-  // CREAR RÚBRICA
-  // =========================
   async crear(data) {
     try {
       console.log('📝 crear: Creando rúbrica');
       console.log('📝 crear: Datos:', JSON.stringify(data, null, 2));
 
-      const { concurso_id, nombre, descripcion, puntaje_maximo, secciones, niveles } = data;
+      const { concurso_id, nombre, descripcion, puntaje_maximo } = data;
 
       const [existentes] = await db.query(`
         SELECT * FROM rubricas WHERE concurso_id = ?
@@ -126,9 +117,6 @@ const RubricaService = {
     }
   },
 
-  // =========================
-  // ACTUALIZAR RÚBRICA
-  // =========================
   async actualizar(id, data) {
     try {
       console.log(`📝 actualizar: Actualizando rúbrica para concurso ${id}`);
@@ -162,9 +150,6 @@ const RubricaService = {
     }
   },
 
-  // =========================
-  // ELIMINAR RÚBRICA
-  // =========================
   async eliminar(id) {
     try {
       console.log(`🗑️ eliminar: Eliminando rúbrica para concurso ${id}`);
@@ -194,32 +179,23 @@ const RubricaService = {
     }
   },
 
-  // =========================
-  // EXPORTAR RÚBRICA A EXCEL - CORREGIDO
-  // =========================
   async exportar(id) {
     try {
       console.log(`📤 exportar: Exportando rúbrica para concurso ${id}`);
       
-      // Obtener la rúbrica completa
       const rubrica = await this.obtener(id);
       if (!rubrica) {
         throw new Error('Rúbrica no encontrada');
       }
 
-      // Crear el libro de Excel
       const workbook = new ExcelJS.Workbook();
       workbook.creator = 'Sistema de Evaluación';
       workbook.created = new Date();
 
-      // =============================================
-      // HOJA 1: ESTRUCTURA DE LA RÚBRICA
-      // =============================================
       const sheet1 = workbook.addWorksheet('Rúbrica', {
         properties: { tabColor: { argb: 'FF2563EB' } }
       });
 
-      // Título
       sheet1.mergeCells('A1:D1');
       const titleCell = sheet1.getCell('A1');
       titleCell.value = `RÚBRICA DE EVALUACIÓN - CONCURSO #${id}`;
@@ -227,7 +203,6 @@ const RubricaService = {
       titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
       sheet1.getRow(1).height = 40;
 
-      // Encabezados de columnas
       const headerRow = sheet1.getRow(3);
       headerRow.values = ['SECCIÓN', 'DESCRIPCIÓN', 'CRITERIO', 'NIVELES'];
       headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -235,7 +210,6 @@ const RubricaService = {
       headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
       headerRow.height = 30;
 
-      // Anchos de columna
       sheet1.getColumn(1).width = 20;
       sheet1.getColumn(2).width = 30;
       sheet1.getColumn(3).width = 50;
@@ -243,7 +217,6 @@ const RubricaService = {
 
       let rowIndex = 4;
 
-      // Agregar secciones, criterios y niveles
       for (const seccion of rubrica.secciones) {
         const seccionNombre = seccion.nombre || 'Sin nombre';
         const seccionDescripcion = seccion.descripcion || '';
@@ -252,7 +225,6 @@ const RubricaService = {
           for (const criterio of seccion.criterios) {
             const row = sheet1.getRow(rowIndex);
             
-            // Sección (solo en la primera fila del grupo)
             if (rowIndex === 4 || sheet1.getCell(rowIndex - 1, 1).value !== seccionNombre) {
               row.getCell(1).value = seccionNombre;
               row.getCell(2).value = seccionDescripcion;
@@ -260,19 +232,16 @@ const RubricaService = {
 
             row.getCell(3).value = criterio.texto || '';
 
-            // Niveles del criterio
             const nivelesTexto = (criterio.niveles || [])
               .map(n => `${n.nombre}: ${n.puntaje} pts`)
               .join('\n');
             row.getCell(4).value = nivelesTexto;
 
-            // Estilos de la fila
             row.alignment = { vertical: 'top', wrapText: true };
             row.getCell(1).alignment = { horizontal: 'left', vertical: 'top', wrapText: true };
             row.getCell(3).alignment = { horizontal: 'left', vertical: 'top', wrapText: true };
             row.getCell(4).alignment = { horizontal: 'left', vertical: 'top', wrapText: true };
 
-            // Bordes
             for (let col = 1; col <= 4; col++) {
               const cell = row.getCell(col);
               cell.border = {
@@ -287,7 +256,6 @@ const RubricaService = {
             rowIndex++;
           }
         } else {
-          // Sección sin criterios
           const row = sheet1.getRow(rowIndex);
           row.getCell(1).value = seccionNombre;
           row.getCell(2).value = seccionDescripcion;
@@ -298,9 +266,6 @@ const RubricaService = {
         }
       }
 
-      // =============================================
-      // HOJA 2: NIVELES GENERALES
-      // =============================================
       const sheet2 = workbook.addWorksheet('Niveles', {
         properties: { tabColor: { argb: 'FF10B981' } }
       });
@@ -312,7 +277,6 @@ const RubricaService = {
       title2.alignment = { horizontal: 'center', vertical: 'middle' };
       sheet2.getRow(1).height = 35;
 
-      // Encabezados
       const headerRow2 = sheet2.getRow(3);
       headerRow2.values = ['NIVEL', 'PUNTAJE', 'DESCRIPCIÓN'];
       headerRow2.font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -347,7 +311,6 @@ const RubricaService = {
         rowIndex2++;
       }
 
-      // Generar el buffer del Excel
       const buffer = await workbook.xlsx.writeBuffer();
 
       console.log(`✅ Rúbrica exportada exitosamente (${buffer.length} bytes)`);
