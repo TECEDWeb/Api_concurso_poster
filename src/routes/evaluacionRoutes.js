@@ -2,17 +2,17 @@ const express = require('express');
 const router = express.Router();
 const evaluacionController = require('../controller/evaluacionController');
 const authMiddleware = require('../middleware/authMiddleware');
-const isAdminMiddleware = require('../middleware/isAdminMiddleware');
+const roleMiddleware = require('../middleware/roleMiddleware'); // ← CAMBIAR
 
 // ============================================
 // RUTAS DE EVALUACIONES
 // ============================================
 
 // GET /api/evaluaciones - Listar todas las evaluaciones (admin)
-router.get('/', authMiddleware, isAdminMiddleware, evaluacionController.getAll);
+router.get('/', authMiddleware, roleMiddleware('admin'), evaluacionController.getAll);
 
 // GET /api/evaluaciones/reporte-admin - Reporte para admin
-router.get('/reporte-admin', authMiddleware, isAdminMiddleware, evaluacionController.getReporteAdmin);
+router.get('/reporte-admin', authMiddleware, roleMiddleware('admin'), evaluacionController.getReporteAdmin);
 
 // GET /api/evaluaciones/asignados - Proyectos asignados al evaluador
 router.get('/asignados', authMiddleware, evaluacionController.getAsignados);
@@ -30,7 +30,7 @@ router.get('/:id/formulario', authMiddleware, evaluacionController.getFormulario
 router.get('/:id/editar', authMiddleware, evaluacionController.getEvaluacionParaEditar);
 
 // POST /api/evaluaciones/asignar - Asignar proyecto a evaluador (admin)
-router.post('/asignar', authMiddleware, isAdminMiddleware, evaluacionController.asignar);
+router.post('/asignar', authMiddleware, roleMiddleware('admin'), evaluacionController.asignar);
 
 // POST /api/evaluaciones/:id/guardar - Guardar evaluación (evaluador)
 router.post('/:id/guardar', authMiddleware, evaluacionController.guardar);
@@ -42,18 +42,18 @@ router.put('/:id/actualizar', authMiddleware, evaluacionController.actualizarEva
 router.post('/:id/finalizar', authMiddleware, evaluacionController.finalizarEvaluacion);
 
 // PUT /api/evaluaciones/:id/reabrir - Reabrir evaluación (admin)
-router.put('/:id/reabrir', authMiddleware, isAdminMiddleware, evaluacionController.reabrirEvaluacion);
+router.put('/:id/reabrir', authMiddleware, roleMiddleware('admin'), evaluacionController.reabrirEvaluacion);
 
 // DELETE /api/evaluaciones/:id - Eliminar evaluación (admin)
-router.delete('/:id', authMiddleware, isAdminMiddleware, evaluacionController.eliminarEvaluacion);
+router.delete('/:id', authMiddleware, roleMiddleware('admin'), evaluacionController.eliminarEvaluacion);
 
 // GET /api/evaluaciones/:id - Obtener evaluación por ID (admin)
-router.get('/:id', authMiddleware, isAdminMiddleware, evaluacionController.getById);
+router.get('/:id', authMiddleware, roleMiddleware('admin'), evaluacionController.getById);
 
 // POST /api/evaluaciones - Crear evaluación (admin)
-router.post('/', authMiddleware, isAdminMiddleware, evaluacionController.create);
+router.post('/', authMiddleware, roleMiddleware('admin'), evaluacionController.create);
 
 // PUT /api/evaluaciones/:id - Actualizar evaluación (admin)
-router.put('/:id', authMiddleware, isAdminMiddleware, evaluacionController.update);
+router.put('/:id', authMiddleware, roleMiddleware('admin'), evaluacionController.update);
 
 module.exports = router;
