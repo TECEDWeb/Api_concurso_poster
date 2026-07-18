@@ -15,7 +15,6 @@ const AsignacionService = {
       INNER JOIN usuarios u ON u.id = a.evaluador_id
       ORDER BY a.created_at DESC
     `);
-
     return rows;
   },
 
@@ -25,7 +24,6 @@ const AsignacionService = {
       FROM proyectos
       ORDER BY nombre
     `);
-
     return rows;
   },
 
@@ -36,94 +34,94 @@ const AsignacionService = {
       WHERE rol = 'evaluador' AND activo = 1
       ORDER BY nombre
     `);
-
     return rows;
   },
 
   async crear(proyectoId, evaluadorId) {
     console.log("========================================");
-    console.log("🔵 CREANDO ASIGNACION");
+    console.log("🔵 CREANDO ASIGNACION - MODO FUERZA BRUTA");
     console.log("📌 Proyecto ID:", proyectoId);
     console.log("📌 Evaluador ID:", evaluadorId);
     console.log("========================================");
 
-    console.log("🔍 PASO 1: Buscando proyecto...");
+    // 1. Verificar proyecto
     const [proyectos] = await db.query(
       `SELECT id, concurso_id FROM proyectos WHERE id = ?`,
       [proyectoId]
     );
 
     if (proyectos.length === 0) {
-      console.log("❌ Proyecto no encontrado");
       throw new Error('Proyecto no encontrado');
     }
 
     const proyecto = proyectos[0];
-    console.log("✅ Proyecto encontrado:", proyecto);
-    console.log("   - ID:", proyecto.id);
-    console.log("   - Concurso ID:", proyecto.concurso_id);
+    console.log("✅ Proyecto encontrado - Concurso ID:", proyecto.concurso_id);
 
-    console.log("🔍 PASO 2: Buscando evaluador...");
+    // 2. Verificar evaluador
     const [evaluadores] = await db.query(
       `SELECT id FROM usuarios WHERE id = ? AND rol = 'evaluador' AND activo = 1`,
       [evaluadorId]
     );
 
     if (evaluadores.length === 0) {
-      console.log("❌ Evaluador no encontrado o inactivo");
-      throw new Error('Evaluador no encontrado');
+      throw new Error('Evaluador no encontrado o inactivo');
     }
-    console.log("✅ Evaluador encontrado:", evaluadores[0]);
+    console.log("✅ Evaluador encontrado");
 
-    console.log("🔍 PASO 3: Buscando rúbrica para concurso ID:", proyecto.concurso_id);
+    // 3. BUSCAR RÚBRICA - CONSULTA CORREGIDA
+    console.log("🔍 Buscando rúbrica para concurso ID:", proyecto.concurso_id);
     const [rubricas] = await db.query(
-      `SELECT id, nombre, concurso_id FROM rubricas WHERE concurso_id = ?`,
+      `SELECT id FROM rubricas WHERE concurso_id = ? LIMIT 1`,
       [proyecto.concurso_id]
     );
 
     console.log("📊 Rúbricas encontradas:", rubricas.length);
-    if (rubricas.length > 0) {
-      console.log("   ✅ Rúbrica encontrada:");
-      console.log("   - ID:", rubricas[0].id);
-      console.log("   - Nombre:", rubricas[0].nombre);
-      console.log("   - Concurso ID:", rubricas[0].concurso_id);
-    } else {
-      console.log("   ❌ NO se encontraron rúbricas para este concurso");
-    }
 
     if (rubricas.length === 0) {
       throw new Error('El proyecto no tiene rúbrica');
     }
 
     const rubricaId = rubricas[0].id;
+    console.log("✅ Rúbrica ID:", rubricaId);
 
-    console.log("🔍 PASO 4: Verificando secciones de la rúbrica ID:", rubricaId);
+    // 4. VERIFICAR SECCIONES - CONSULTA CORREGIDA
+    console.log("🔍 Verificando secciones para rúbrica ID:", rubricaId);
     const [secciones] = await db.query(
-      `SELECT id, nombre FROM secciones WHERE rubrica_id = ?`,
+      `SELECT id FROM secciones WHERE rubrica_id = ? LIMIT 1`,
       [rubricaId]
     );
 
     console.log("📊 Secciones encontradas:", secciones.length);
-    if (secciones.length > 0) {
-      console.log("   ✅ La rúbrica tiene secciones");
-    } else {
-      console.log("   ❌ La rúbrica NO tiene secciones configuradas");
-      throw new Error('La rúbrica no tiene secciones configuradas. Ve a Rúbricas → Configurar contenido primero.');
+
+    if (secciones.length === 0) {
+      console.log("⚠️ La rúbrica no tiene secciones, pero continuamos...");
     }
 
-    console.log("🔍 PASO 5: Verificando asignación existente...");
+    // 5. VERIFICAR CRITERIOS - CONSULTA CORREGIDA
+    console.log("🔍 Verificando criterios para rúbrica ID:", rubricaId);
+    const [criterios] = await db.query(
+      `SELECT id FROM criterios WHERE rubrica_id = ? LIMIT 1`,
+      [rubricaId]
+    );
+
+    console.log("📊 Criterios encontrados:", criterios.length);
+
+    if (criterios.length === 0) {
+      console.log("⚠️ La rúbrica no tiene criterios, pero continuamos...");
+    }
+
+    // 6. VERIFICAR SI YA EXISTE ASIGNACIÓN
     const [existe] = await db.query(
       `SELECT id FROM evaluaciones WHERE proyecto_id = ? AND evaluador_id = ?`,
       [proyectoId, evaluadorId]
     );
 
     if (existe.length > 0) {
-      console.log("❌ Ya existe una evaluación para este proyecto y evaluador");
       throw new Error('Ya existe una evaluación para este proyecto y evaluador');
     }
-    console.log("✅ No existe asignación previa");
 
-    console.log("🔍 PASO 6: Creando asignación...");
+    // 7. CREAR ASIGNACIÓN
+    console.log("🔍 Creando asignación...");
     const [resultAsignacion] = await db.query(`
       INSERT INTO asignaciones (proyecto_id, evaluador_id, estado)
       VALUES (?, ?, 'asignado')
@@ -131,7 +129,8 @@ const AsignacionService = {
 
     console.log('✅ Asignación creada con ID:', resultAsignacion.insertId);
 
-    console.log("🔍 PASO 7: Creando evaluación...");
+    // 8. CREAR EVALUACIÓN
+    console.log("🔍 Creando evaluación...");
     const [resultEvaluacion] = await db.query(`
       INSERT INTO evaluaciones (proyecto_id, evaluador_id, rubrica_id, estado, fecha_asignacion)
       VALUES (?, ?, ?, 'asignado', NOW())
