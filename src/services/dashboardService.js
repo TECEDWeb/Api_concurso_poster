@@ -48,7 +48,7 @@ exports.getAdminStats = async () => {
         `);
         promedio = promedioResult[0].promedio || 0;
       } catch (e2) {
-        console.log('⚠️ No se pudo calcular el promedio:', e2.message);
+        console.log('No se pudo calcular el promedio:', e2.message);
         promedio = 0;
       }
     }
@@ -56,7 +56,7 @@ exports.getAdminStats = async () => {
     // Redondear promedio a 1 decimal
     promedio = Math.round(promedio * 10) / 10;
 
-    console.log('📊 DATOS DASHBOARD:', {
+    console.log('DATOS DASHBOARD:', {
       usuarios: usuarios[0].total,
       concursos: concursos[0].total,
       proyectos: proyectos[0].total,
@@ -75,7 +75,7 @@ exports.getAdminStats = async () => {
     };
 
   } catch (error) {
-    console.error('❌ ERROR DASHBOARD SERVICE:', error);
+    console.error('ERROR DASHBOARD SERVICE:', error);
     throw error;
   }
 };
@@ -143,7 +143,7 @@ exports.getActividadesRecientes = async (limite = 5) => {
     });
 
   } catch (error) {
-    console.error('❌ ERROR ACTIVIDADES RECIENTES:', error);
+    console.error('ERROR ACTIVIDADES RECIENTES:', error);
     return [];
   }
 };
@@ -182,7 +182,7 @@ exports.getNotificaciones = async (usuarioId) => {
     return notificaciones || [];
 
   } catch (error) {
-    console.log('⚠️ No se pudieron obtener notificaciones:', error.message);
+    console.log('No se pudieron obtener notificaciones:', error.message);
     return [];
   }
 };
@@ -213,7 +213,7 @@ exports.contarNotificaciones = async (usuarioId) => {
     return notificaciones[0].count || 0;
 
   } catch (error) {
-    console.log('⚠️ No se pudo contar notificaciones:', error.message);
+    console.log('No se pudo contar notificaciones:', error.message);
     return 0;
   }
 };
@@ -232,7 +232,7 @@ exports.marcarNotificacionesLeidas = async (usuarioId) => {
     return true;
 
   } catch (error) {
-    console.log('⚠️ No se pudieron marcar notificaciones:', error.message);
+    console.log('No se pudieron marcar notificaciones:', error.message);
     return true;
   }
 };

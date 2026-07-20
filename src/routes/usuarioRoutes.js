@@ -6,11 +6,11 @@ const roleMiddleware = require('../middleware/roleMiddleware');
 const usuarioController = require('../controller/usuarioController');
 
 console.log('======================================');
-console.log('✅ usuarioRoutes.js CARGADO');
+console.log('usuarioRoutes.js CARGADO');
 console.log('======================================');
 
 router.get('/ping', (req, res) => {
-  console.log('🏓 PING usuarios');
+  console.log('PING usuarios');
   res.json({
     ok: true,
     mensaje: 'usuarioRoutes funcionando correctamente'
@@ -28,7 +28,7 @@ router.post('/:id/reset-password', authMiddleware, roleMiddleware('admin'), usua
 router.delete('/:id', authMiddleware, roleMiddleware('admin'), usuarioController.eliminar);
 
 router.get('/ejemplo-multi-rol', authMiddleware, roleMiddleware('admin', 'evaluador'), (req, res) => {
-  console.log('📥 GET /api/usuarios/ejemplo-multi-rol');
+  console.log('GET /api/usuarios/ejemplo-multi-rol');
   res.json({
     ok: true,
     mensaje: `Hola ${req.usuario.nombre}, tu rol es ${req.usuario.rol}`

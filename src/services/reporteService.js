@@ -2,11 +2,7 @@
 const db = require('../config/db');
 
 const ReporteService = {
-  // ... métodos existentes ...
 
-  // ==============================
-  // DETALLE DE PROYECTO
-  // ==============================
   async getDetalleProyecto(proyectoId) {
     // Obtener proyecto
     const [proyectos] = await db.query(
@@ -78,9 +74,6 @@ const ReporteService = {
     };
   },
 
-  // ==============================
-  // EXPORTAR EXCEL POR PROYECTO
-  // ==============================
   async exportarProyecto(proyectoId) {
     const [proyectos] = await db.query(
       `SELECT id, nombre FROM proyectos WHERE id = ?`,

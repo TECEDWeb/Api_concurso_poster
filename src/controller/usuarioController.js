@@ -99,7 +99,7 @@ const usuarioController = {
       const { id } = req.params;
       const { cedula, nombre, email, telefono, rol, departamento, activo, password } = req.body;
 
-      console.log('🔵 ACTUALIZAR USUARIO ID:', id);
+      console.log('ACTUALIZAR USUARIO ID:', id);
 
       const usuarioExistente = await usuarioModel.buscarPorId(id);
       if (!usuarioExistente) {
@@ -162,7 +162,7 @@ const usuarioController = {
   async toggleActivo(req, res) {
     try {
       const { id } = req.params;
-      console.log('🔄 Cambiando estado del usuario ID:', id);
+      console.log('Cambiando estado del usuario ID:', id);
 
       const usuarioExistente = await usuarioModel.buscarPorId(id);
       if (!usuarioExistente) {

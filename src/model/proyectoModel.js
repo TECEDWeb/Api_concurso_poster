@@ -95,7 +95,6 @@ const proyectoModel = {
     }
   },
 
-  // 🔥 ASIGNACIÓN DE EVALUADORES (TABLA INTERMEDIA)
   async assignEvaluadores(proyectoId, evaluadoresIds) {
 
     await pool.query(

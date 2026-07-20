@@ -310,7 +310,7 @@ exports.exportar = async (req, res) => {
 exports.exportarProyecto = async (req, res) => {
   try {
     const proyectoId = parseInt(req.params.proyectoId);
-    console.log(`📤 Exportando Excel para proyecto ID: ${proyectoId}`);
+    console.log(`Exportando Excel para proyecto ID: ${proyectoId}`);
 
     const [proyectos] = await db.query(
       `SELECT id, nombre FROM proyectos WHERE id = ?`,

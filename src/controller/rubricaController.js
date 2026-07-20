@@ -2,12 +2,9 @@ const RubricaService = require('../services/rubricaService');
 
 const rubricaController = {
 
-  // =========================
-  // LISTAR RÚBRICAS
-  // =========================
   async listar(req, res) {
     try {
-      console.log('📥 GET /api/rubricas');
+      console.log('GET /api/rubricas');
       const rubricas = await RubricaService.listar();
 
       return res.json({
@@ -16,7 +13,7 @@ const rubricaController = {
       });
 
     } catch (error) {
-      console.error('❌ ERROR listar rubricas:', error);
+      console.error('ERROR listar rubricas:', error);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al listar rúbricas: ' + error.message
@@ -24,13 +21,10 @@ const rubricaController = {
     }
   },
 
-  // =========================
-  // OBTENER RÚBRICA POR CONCURSO
-  // =========================
   async obtener(req, res) {
     try {
       const id = parseInt(req.params.id);
-      console.log('📥 GET /api/rubricas/' + id);
+      console.log('GET /api/rubricas/' + id);
 
       const rubrica = await RubricaService.obtener(id);
 
@@ -47,7 +41,7 @@ const rubricaController = {
       });
 
     } catch (error) {
-      console.error('❌ ERROR obtener rubrica:', error);
+      console.error('ERROR obtener rubrica:', error);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al obtener rúbrica: ' + error.message
@@ -55,13 +49,10 @@ const rubricaController = {
     }
   },
 
-  // =========================
-  // CREAR RÚBRICA
-  // =========================
   async crear(req, res) {
     try {
-      console.log('📥 POST /api/rubricas');
-      console.log('📦 BODY RECIBIDO:', JSON.stringify(req.body, null, 2));
+      console.log('POST /api/rubricas');
+      console.log('BODY RECIBIDO:', JSON.stringify(req.body, null, 2));
 
       // Validar que tenga concurso_id
       if (!req.body.concurso_id) {
@@ -95,7 +86,7 @@ const rubricaController = {
       });
 
     } catch (error) {
-      console.error('❌ ERROR crear rubrica:', error);
+      console.error('ERROR crear rubrica:', error);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al crear rúbrica: ' + error.message
@@ -103,14 +94,11 @@ const rubricaController = {
     }
   },
 
-  // =========================
-  // ACTUALIZAR RÚBRICA - CORREGIDO
-  // =========================
   async actualizar(req, res) {
     try {
       const id = parseInt(req.params.id);
-      console.log('📥 PUT /api/rubricas/' + id);
-      console.log('📦 BODY RECIBIDO:', JSON.stringify(req.body, null, 2));
+      console.log('PUT /api/rubricas/' + id);
+      console.log('BODY RECIBIDO:', JSON.stringify(req.body, null, 2));
 
       // Verificar si el body está vacío
       if (!req.body || Object.keys(req.body).length === 0) {
@@ -141,7 +129,7 @@ const rubricaController = {
       });
 
     } catch (error) {
-      console.error('❌ ERROR actualizar rubrica:', error);
+      console.error('ERROR actualizar rubrica:', error);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al actualizar rúbrica: ' + error.message
@@ -149,13 +137,10 @@ const rubricaController = {
     }
   },
 
-  // =========================
-  // ELIMINAR RÚBRICA
-  // =========================
   async eliminar(req, res) {
     try {
       const id = parseInt(req.params.id);
-      console.log('📥 DELETE /api/rubricas/' + id);
+      console.log('DELETE /api/rubricas/' + id);
 
       const eliminado = await RubricaService.eliminar(id);
 
@@ -172,7 +157,7 @@ const rubricaController = {
       });
 
     } catch (error) {
-      console.error('❌ ERROR eliminar rubrica:', error);
+      console.error('ERROR eliminar rubrica:', error);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al eliminar rúbrica: ' + error.message
@@ -180,13 +165,10 @@ const rubricaController = {
     }
   },
 
-  // =========================
-  // EXPORTAR RÚBRICA
-  // =========================
   async exportar(req, res) {
     try {
       const id = parseInt(req.params.id);
-      console.log('📥 GET /api/rubricas/' + id + '/exportar');
+      console.log('GET /api/rubricas/' + id + '/exportar');
 
       const excelBuffer = await RubricaService.exportar(id);
 
@@ -202,7 +184,7 @@ const rubricaController = {
       res.send(excelBuffer);
 
     } catch (error) {
-      console.error('❌ ERROR exportar rubrica:', error);
+      console.error('ERROR exportar rubrica:', error);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al exportar rúbrica: ' + error.message

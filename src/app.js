@@ -51,7 +51,7 @@ app.use('/api/niveles', nivelRoutes);
 app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
-    mensaje: 'API funcionando correctamente 🚀'
+    mensaje: 'API funcionando correctamente'
   });
 });
 
@@ -80,12 +80,12 @@ const PORT = process.env.PORT || 3000;
 try {
   verificarConexionCorreo();
 } catch (error) {
-  console.error('⚠️ Error inesperado verificando el correo (servidor continúa):', error.message);
+  console.error('Error inesperado verificando el correo (servidor continúa):', error.message);
 }
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Servidor activo en puerto ${PORT}`);
-  console.log(`🔗 API: https://apievaluacion.teced.org`);
+  console.log(`Servidor activo en puerto ${PORT}`);
+  console.log(`API: https://apievaluacion.teced.org`);
 });
 
 module.exports = app;

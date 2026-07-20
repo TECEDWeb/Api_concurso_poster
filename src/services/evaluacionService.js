@@ -4,7 +4,7 @@ const EvaluacionService = {
 
   
   async getFormularioByConcurso(concursoId) {
-    console.log("🔍 Buscando rúbrica para concurso:", concursoId);
+    console.log("Buscando rúbrica para concurso:", concursoId);
 
     const [rubricaRows] = await db.query(
       `SELECT * FROM rubricas WHERE concurso_id = ? LIMIT 1`,
@@ -62,7 +62,7 @@ const EvaluacionService = {
 
     try {
 
-      console.log('🟡 Creando asignación');
+      console.log('Creando asignación');
       console.log('Evaluador:', evaluadorId);
       console.log('Proyecto:', proyectoId);
 
@@ -94,7 +94,7 @@ const EvaluacionService = {
       const rubricaId = rubricas[0].rubrica_id;
 
 
-      console.log('🟢 Rúbrica encontrada:', rubricaId);
+      console.log('Rúbrica encontrada:', rubricaId);
 
 
 
@@ -120,7 +120,7 @@ const EvaluacionService = {
 
 
       console.log(
-        '🟢 Evaluación creada ID:',
+        'Evaluación creada ID:',
         result.insertId
       );
 
@@ -137,7 +137,7 @@ const EvaluacionService = {
     } catch (error) {
 
       console.error(
-        '🔴 Error asignando proyecto:',
+        'Error asignando proyecto:',
         error
       );
 
@@ -262,7 +262,7 @@ const EvaluacionService = {
 
   async getFormulario(evaluacionId) {
     try {
-      console.log("🔍 Buscando evaluación ID:", evaluacionId);
+      console.log("Buscando evaluación ID:", evaluacionId);
 
       const [rows] = await db.query(
         `SELECT 
@@ -279,7 +279,7 @@ const EvaluacionService = {
         [evaluacionId]
       );
 
-      console.log("📊 Evaluación encontrada:", rows);
+      console.log("Evaluación encontrada:", rows);
 
       if (!rows || rows.length === 0) {
         return {
@@ -334,7 +334,7 @@ const EvaluacionService = {
       };
 
     } catch (error) {
-      console.error('❌ ERROR getFormulario:', error);
+      console.error('ERROR getFormulario:', error);
       return {
         ok: false,
         mensaje: 'Error interno al generar formulario: ' + error.message
@@ -460,10 +460,6 @@ const EvaluacionService = {
     };
   },
 
-/**
- * ELIMINAR EVALUACIÓN COMPLETA (ADMIN)
- * Elimina completamente una evaluación y sus detalles
- */
   async eliminarEvaluacion(evaluacionId) {
     const [evaluacion] = await db.query(
       `SELECT id FROM evaluaciones WHERE id = ?`,
@@ -504,10 +500,6 @@ const EvaluacionService = {
     }
   },
 
-/**
- * OBTENER DETALLE DE EVALUACIÓN PARA EDICIÓN
- * Retorna los detalles guardados para que el evaluador pueda ver sus respuestas anteriores
- */
   async getDetalleEvaluacionParaEdicion(evaluacionId) {
     const [evaluacion] = await db.query(
       `SELECT 
@@ -581,10 +573,6 @@ const EvaluacionService = {
     };
   },
 
-/**
- * ACTUALIZAR EVALUACIÓN EXISTENTE (EVALUADOR)
- * Permite al evaluador modificar sus respuestas
- */
   async actualizarEvaluacion({ evaluacionId, observacion, detalles }) {
     // Verificar que la evaluación existe y está en estado asignado
     const [evaluacion] = await db.query(
@@ -630,10 +618,6 @@ const EvaluacionService = {
     };
   },
 
-  /**
-   * FINALIZAR EVALUACIÓN (EVALUADOR)
-   * Cambia el estado de 'asignado' a 'evaluado'
-   */
   async finalizarEvaluacion(evaluacionId) {
     const [evaluacion] = await db.query(
       `SELECT estado FROM evaluaciones WHERE id = ?`,

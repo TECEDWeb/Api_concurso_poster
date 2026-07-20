@@ -1,10 +1,6 @@
 const db = require('../config/db');
 
 const usuarioModel = {
-
-  // ============================================
-  // LISTAR USUARIOS CON FILTRO OPCIONAL
-  // ============================================
   async listar({ rol } = {}) {
     let query = 'SELECT id, cedula, nombre, email, telefono, rol, departamento, activo, created_at FROM usuarios';
     const params = [];
@@ -20,9 +16,6 @@ const usuarioModel = {
     return rows;
   },
 
-  // ============================================
-  // OBTENER SOLO EVALUADORES
-  // ============================================
   async getEvaluadores() {
     const [rows] = await db.query(
       `SELECT id, cedula, nombre, email, telefono, rol, departamento, activo 
@@ -33,9 +26,6 @@ const usuarioModel = {
     return rows;
   },
 
-  // ============================================
-  // BUSCAR POR CÉDULA
-  // ============================================
   async buscarPorCedula(cedula) {
     const [rows] = await db.query(
       `SELECT id, cedula, nombre, email, telefono, rol, departamento, activo, password_hash 
@@ -46,9 +36,6 @@ const usuarioModel = {
     return rows[0] || null;
   },
 
-  // ============================================
-  // BUSCAR POR EMAIL
-  // ============================================
   async buscarPorEmail(email) {
     const [rows] = await db.query(
       `SELECT id, cedula, nombre, email, telefono, rol, departamento, activo, password_hash 
@@ -59,9 +46,6 @@ const usuarioModel = {
     return rows[0] || null;
   },
 
-  // ============================================
-  // BUSCAR POR ID
-  // ============================================
   async buscarPorId(id) {
     const [rows] = await db.query(
       `SELECT id, cedula, nombre, email, telefono, rol, departamento, activo, created_at 
@@ -72,9 +56,6 @@ const usuarioModel = {
     return rows[0] || null;
   },
 
-  // ============================================
-  // CREAR USUARIO
-  // ============================================
   async crear({ cedula, nombre, email, telefono, password_hash, rol, departamento }) {
     const [result] = await db.query(
       `INSERT INTO usuarios 
@@ -85,9 +66,6 @@ const usuarioModel = {
     return result.insertId;
   },
 
-  // ============================================
-  // ACTUALIZAR USUARIO
-  // ============================================
   async actualizar(id, { cedula, nombre, email, telefono, rol, departamento, activo, password_hash }) {
     let query = 'UPDATE usuarios SET ';
     const params = [];
@@ -138,9 +116,6 @@ const usuarioModel = {
     return result.affectedRows > 0;
   },
 
-  // ============================================
-  // CAMBIAR ESTADO (activo/inactivo)
-  // ============================================
   async toggleActivo(id) {
     const [usuario] = await db.query(
       `SELECT activo FROM usuarios WHERE id = ?`,
@@ -159,9 +134,6 @@ const usuarioModel = {
     return result.affectedRows > 0;
   },
 
-  // ============================================
-  // RESETEAR CONTRASEÑA
-  // ============================================
   async resetPassword(id, password_hash) {
     const [result] = await db.query(
       `UPDATE usuarios SET password_hash = ? WHERE id = ?`,
@@ -170,9 +142,6 @@ const usuarioModel = {
     return result.affectedRows > 0;
   },
 
-  // ============================================
-  // ELIMINAR USUARIO
-  // ============================================
   async eliminar(id) {
     const [result] = await db.query(
       `DELETE FROM usuarios WHERE id = ?`,

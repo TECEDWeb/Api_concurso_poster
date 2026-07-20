@@ -1,6 +1,5 @@
 const db = require('../config/db');
 
-// GET /api/secciones?concursoId=5
 exports.getAll = async (req, res) => {
   try {
     const { concursoId } = req.query;

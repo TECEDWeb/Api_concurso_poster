@@ -40,9 +40,9 @@ async function enviarCorreoRecuperacion(destinatario, nombre, enlaceReset) {
 async function verificarConexionCorreo() {
   try {
     await transporter.verify();
-    console.log('✅ Servicio de correo (Gmail) configurado correctamente');
+    console.log('Servicio de correo (Gmail) configurado correctamente');
   } catch (error) {
-    console.error('⚠️ No se pudo verificar el servicio de correo:', error.message);
+    console.error('No se pudo verificar el servicio de correo:', error.message);
   }
 }
 

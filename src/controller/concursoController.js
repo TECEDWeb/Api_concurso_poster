@@ -4,7 +4,7 @@ const concursoController = {
 
   async listar(req, res) {
     try {
-      console.log('📥 GET /concursos');
+      console.log('GET /concursos');
       const concursos = await concursoModel.listar();
       
       return res.json({
@@ -12,7 +12,7 @@ const concursoController = {
         data: concursos
       });
     } catch (error) {
-      console.error('❌ ERROR listar concursos:', error);
+      console.error('ERROR listar concursos:', error);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al listar concursos'
@@ -23,7 +23,7 @@ const concursoController = {
   async obtenerPorId(req, res) {
     try {
       const id = parseInt(req.params.id);
-      console.log('📥 GET /concursos/' + id);
+      console.log('GET /concursos/' + id);
 
       const concurso = await concursoModel.buscarPorId(id);
 
@@ -39,7 +39,7 @@ const concursoController = {
         data: concurso
       });
     } catch (error) {
-      console.error('❌ ERROR obtener concurso:', error);
+      console.error('ERROR obtener concurso:', error);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al obtener concurso'
@@ -49,7 +49,7 @@ const concursoController = {
 
   async crear(req, res) {
     try {
-      console.log('📥 POST /concursos', req.body);
+      console.log('POST /concursos', req.body);
 
       const { nombre, descripcion, tipo, fecha_inicio, fecha_fin, puntaje_maximo, activo } = req.body;
 
@@ -78,7 +78,7 @@ const concursoController = {
         data: concursoCreado
       });
     } catch (error) {
-      console.error('❌ ERROR crear concurso:', error);
+      console.error('ERROR crear concurso:', error);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al crear concurso'
@@ -89,7 +89,7 @@ const concursoController = {
   async actualizar(req, res) {
     try {
       const id = parseInt(req.params.id);
-      console.log('📥 PUT /concursos/' + id, req.body);
+      console.log('PUT /concursos/' + id, req.body);
 
       const { nombre, descripcion, tipo, fecha_inicio, fecha_fin, puntaje_maximo, activo } = req.body;
 
@@ -126,7 +126,7 @@ const concursoController = {
         data: concursoActualizado
       });
     } catch (error) {
-      console.error('❌ ERROR actualizar concurso:', error);
+      console.error('ERROR actualizar concurso:', error);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al actualizar concurso'
@@ -137,7 +137,7 @@ const concursoController = {
   async eliminar(req, res) {
     try {
       const id = parseInt(req.params.id);
-      console.log('📥 DELETE /concursos/' + id);
+      console.log('DELETE /concursos/' + id);
 
       const existe = await concursoModel.buscarPorId(id);
       if (!existe) {
@@ -154,7 +154,7 @@ const concursoController = {
         mensaje: 'Concurso eliminado correctamente'
       });
     } catch (error) {
-      console.error('❌ ERROR eliminar concurso:', error);
+      console.error('ERROR eliminar concurso:', error);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al eliminar concurso'

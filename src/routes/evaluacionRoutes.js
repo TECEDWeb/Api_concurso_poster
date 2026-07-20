@@ -11,15 +11,12 @@ router.get('/mis-resultados', authMiddleware, evaluacionController.getMisResulta
 router.get('/resumen', authMiddleware, evaluacionController.getResumen);
 router.get('/:id/formulario', authMiddleware, evaluacionController.getFormulario);
 router.get('/:id/editar', authMiddleware, evaluacionController.getEvaluacionParaEditar);
-
 router.post('/asignar', authMiddleware, roleMiddleware('admin'), evaluacionController.asignar);
 router.post('/:id/guardar', authMiddleware, evaluacionController.guardar);
 router.put('/:id/actualizar', authMiddleware, evaluacionController.actualizarEvaluacion);
 router.post('/:id/finalizar', authMiddleware, evaluacionController.finalizarEvaluacion);
-
 router.put('/:id/reabrir', authMiddleware, roleMiddleware('admin'), evaluacionController.reabrirEvaluacion);
 router.delete('/:id', authMiddleware, roleMiddleware('admin'), evaluacionController.eliminarEvaluacion);
-
 router.get('/:id', authMiddleware, roleMiddleware('admin'), evaluacionController.getById);
 router.post('/', authMiddleware, roleMiddleware('admin'), evaluacionController.create);
 router.put('/:id', authMiddleware, roleMiddleware('admin'), evaluacionController.update);

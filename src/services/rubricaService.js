@@ -5,13 +5,13 @@ const RubricaService = {
 
   async listar() {
     try {
-      console.log('📋 listar: Iniciando...');
+      console.log('listar: Iniciando...');
       
       const [rubricas] = await db.query(`
         SELECT * FROM rubricas ORDER BY created_at DESC
       `);
 
-      console.log(`📋 listar: ${rubricas.length} rúbricas encontradas`);
+      console.log(`listar: ${rubricas.length} rúbricas encontradas`);
 
       const resultado = [];
 
@@ -41,14 +41,14 @@ const RubricaService = {
       return resultado;
 
     } catch (error) {
-      console.error('❌ ERROR listar rubricas:', error);
+      console.error('ERROR listar rubricas:', error);
       throw error;
     }
   },
 
   async obtener(concursoId) {
     try {
-      console.log(`🔍 obtener: Buscando rúbrica para concurso ${concursoId}`);
+      console.log(`obtener: Buscando rúbrica para concurso ${concursoId}`);
       
       const [rubricas] = await db.query(`
         SELECT * FROM rubricas WHERE concurso_id = ?
@@ -82,15 +82,15 @@ const RubricaService = {
       };
 
     } catch (error) {
-      console.error('❌ ERROR obtener rubrica:', error);
+      console.error('ERROR obtener rubrica:', error);
       throw error;
     }
   },
 
   async crear(data) {
     try {
-      console.log('📝 crear: Creando rúbrica');
-      console.log('📝 crear: Datos:', JSON.stringify(data, null, 2));
+      console.log('crear: Creando rúbrica');
+      console.log('crear: Datos:', JSON.stringify(data, null, 2));
 
       const { concurso_id, nombre, descripcion, puntaje_maximo } = data;
 
@@ -107,20 +107,20 @@ const RubricaService = {
         VALUES (?, ?, ?, ?, ?)
       `, [concurso_id, nombre, descripcion || null, puntaje_maximo || 100, 'ACTIVA']);
 
-      console.log(`✅ Rúbrica creada con ID: ${result.insertId}`);
+      console.log(`Rúbrica creada con ID: ${result.insertId}`);
 
       return { id: result.insertId, concurso_id };
 
     } catch (error) {
-      console.error('❌ ERROR crear rubrica:', error);
+      console.error('ERROR crear rubrica:', error);
       throw error;
     }
   },
 
   async actualizar(id, data) {
     try {
-      console.log(`📝 actualizar: Actualizando rúbrica para concurso ${id}`);
-      console.log('📝 actualizar: Datos:', JSON.stringify(data, null, 2));
+      console.log(`actualizar: Actualizando rúbrica para concurso ${id}`);
+      console.log('actualizar: Datos:', JSON.stringify(data, null, 2));
 
       const { nombre, descripcion, puntaje_maximo } = data;
 
@@ -140,19 +140,19 @@ const RubricaService = {
         WHERE id = ?
       `, [nombre, descripcion || null, puntaje_maximo || 100, rubrica.id]);
 
-      console.log(`✅ Rúbrica actualizada para concurso ${id}`);
+      console.log(`Rúbrica actualizada para concurso ${id}`);
 
       return { concurso_id: id };
 
     } catch (error) {
-      console.error('❌ ERROR actualizar rubrica:', error);
+      console.error('ERROR actualizar rubrica:', error);
       throw error;
     }
   },
 
   async eliminar(id) {
     try {
-      console.log(`🗑️ eliminar: Eliminando rúbrica para concurso ${id}`);
+      console.log(`eliminar: Eliminando rúbrica para concurso ${id}`);
       
       const [rubricas] = await db.query(`
         SELECT * FROM rubricas WHERE concurso_id = ?
@@ -169,19 +169,19 @@ const RubricaService = {
       await db.query('DELETE FROM rubricas WHERE id = ?', [rubrica.id]);
       await db.query('SET FOREIGN_KEY_CHECKS = 1');
 
-      console.log(`✅ Rúbrica eliminada para concurso ${id}`);
+      console.log(`Rúbrica eliminada para concurso ${id}`);
       return true;
 
     } catch (error) {
       await db.query('SET FOREIGN_KEY_CHECKS = 1');
-      console.error('❌ ERROR eliminar rubrica:', error);
+      console.error('ERROR eliminar rubrica:', error);
       throw error;
     }
   },
 
   async exportar(id) {
     try {
-      console.log(`📤 exportar: Exportando rúbrica para concurso ${id}`);
+      console.log(`exportar: Exportando rúbrica para concurso ${id}`);
       
       const rubrica = await this.obtener(id);
       if (!rubrica) {
@@ -313,11 +313,11 @@ const RubricaService = {
 
       const buffer = await workbook.xlsx.writeBuffer();
 
-      console.log(`✅ Rúbrica exportada exitosamente (${buffer.length} bytes)`);
+      console.log(`Rúbrica exportada exitosamente (${buffer.length} bytes)`);
       return buffer;
 
     } catch (error) {
-      console.error('❌ ERROR exportar rubrica:', error);
+      console.error('ERROR exportar rubrica:', error);
       throw error;
     }
   }

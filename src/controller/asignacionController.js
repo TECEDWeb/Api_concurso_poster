@@ -3,13 +3,10 @@ const db = require('../config/db');
 
 const controller = {
 
-  // ============================================
-  // 🔬 RUTA DE DIAGNÓSTICO
-  // ============================================
   async diagnosticar(req, res) {
     try {
       console.log("========================================");
-      console.log("🔬 DIAGNÓSTICO DE ASIGNACIÓN");
+      console.log("DIAGNÓSTICO DE ASIGNACIÓN");
       console.log("========================================");
       
       const { proyectoId } = req.query;
@@ -21,7 +18,7 @@ const controller = {
         });
       }
 
-      console.log("📌 Proyecto ID a diagnosticar:", proyectoId);
+      console.log("Proyecto ID a diagnosticar:", proyectoId);
 
       const [proyectos] = await db.query(
         `SELECT id, nombre, concurso_id FROM proyectos WHERE id = ?`,
@@ -36,37 +33,37 @@ const controller = {
       }
 
       const proyecto = proyectos[0];
-      console.log("✅ Proyecto encontrado:", proyecto);
+      console.log("Proyecto encontrado:", proyecto);
 
       const [rubricas] = await db.query(
         `SELECT id, nombre, concurso_id FROM rubricas WHERE concurso_id = ?`,
         [proyecto.concurso_id]
       );
 
-      console.log("📊 Rúbricas encontradas:", rubricas.length);
+      console.log("Rúbricas encontradas:", rubricas.length);
       
       let rubricaInfo = null;
       let tieneSecciones = false;
       
       if (rubricas.length > 0) {
         rubricaInfo = rubricas[0];
-        console.log("✅ Rúbrica encontrada:", rubricaInfo);
+        console.log("Rúbrica encontrada:", rubricaInfo);
         
         const [secciones] = await db.query(
           `SELECT id, nombre FROM secciones WHERE rubrica_id = ?`,
           [rubricaInfo.id]
         );
-        console.log("📊 Secciones encontradas:", secciones.length);
+        console.log("Secciones encontradas:", secciones.length);
         tieneSecciones = secciones.length > 0;
         rubricaInfo.secciones = secciones.length;
       } else {
-        console.log("❌ NO hay rúbrica para el concurso ID:", proyecto.concurso_id);
+        console.log("NO hay rúbrica para el concurso ID:", proyecto.concurso_id);
       }
 
       const [evaluadores] = await db.query(
         `SELECT id, nombre, rol FROM usuarios WHERE rol = 'evaluador' AND activo = 1`
       );
-      console.log("📊 Evaluadores disponibles:", evaluadores.length);
+      console.log("Evaluadores disponibles:", evaluadores.length);
 
       return res.json({
         ok: true,
@@ -87,7 +84,7 @@ const controller = {
       });
 
     } catch (error) {
-      console.error("❌ Error en diagnóstico:", error);
+      console.error("Error en diagnóstico:", error);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error en diagnóstico: ' + error.message
@@ -137,10 +134,10 @@ const controller = {
   async crear(req, res) {
     try {
       console.log("========================================");
-      console.log("📥 CONTROLLER: CREAR ASIGNACION");
+      console.log("CONTROLLER: CREAR ASIGNACION");
       console.log("========================================");
-      console.log("📦 BODY RECIBIDO:", JSON.stringify(req.body, null, 2));
-      console.log("👤 Usuario autenticado:", req.usuario);
+      console.log("BODY RECIBIDO:", JSON.stringify(req.body, null, 2));
+      console.log("Usuario autenticado:", req.usuario);
       console.log("========================================");
 
       const { proyectoId, evaluadorId, proyecto_id, evaluador_id } = req.body;
@@ -148,21 +145,21 @@ const controller = {
       const proyecto = proyectoId || proyecto_id;
       const evaluador = evaluadorId || evaluador_id;
 
-      console.log("📌 Proyecto ID (normalizado):", proyecto);
-      console.log("📌 Evaluador ID (normalizado):", evaluador);
+      console.log("Proyecto ID (normalizado):", proyecto);
+      console.log("Evaluador ID (normalizado):", evaluador);
 
       if (!proyecto || !evaluador) {
-        console.log("❌ Faltan datos: proyecto o evaluador");
+        console.log("Faltan datos: proyecto o evaluador");
         return res.status(400).json({
           ok: false,
           mensaje: 'Datos incompletos: proyecto y evaluador son obligatorios'
         });
       }
 
-      console.log("🔵 Llamando a AsignacionService.crear()...");
+      console.log("Llamando a AsignacionService.crear()...");
       const data = await AsignacionService.crear(proyecto, evaluador);
 
-      console.log("✅ ASIGNACION CREADA EXITOSAMENTE:", data);
+      console.log("ASIGNACION CREADA EXITOSAMENTE:", data);
 
       return res.status(201).json({
         ok: true,
@@ -172,26 +169,26 @@ const controller = {
 
     } catch (err) {
       console.error("========================================");
-      console.error("❌ ERROR EN CONTROLLER.crear");
+      console.error("ERROR EN CONTROLLER.crear");
       console.error("========================================");
-      console.error("📌 Mensaje de error:", err.message);
-      console.error("📌 Stack trace:", err.stack);
+      console.error("Mensaje de error:", err.message);
+      console.error("Stack trace:", err.stack);
       console.error("========================================");
       
       let mensaje = err.message;
       let statusCode = 400;
 
       if (mensaje === 'El proyecto no tiene rúbrica') {
-        mensaje = '❌ El proyecto no tiene una rúbrica asociada. Por favor, crea una rúbrica primero.';
+        mensaje = 'El proyecto no tiene una rúbrica asociada. Por favor, crea una rúbrica primero.';
       } else if (mensaje === 'La rúbrica no tiene secciones configuradas. Ve a Rúbricas → Configurar contenido primero.') {
-        mensaje = '⚠️ La rúbrica existe pero está vacía. Ve a la sección Rúbricas y configura el contenido.';
+        mensaje = 'La rúbrica existe pero está vacía. Ve a la sección Rúbricas y configura el contenido.';
       } else if (mensaje === 'Ya existe una evaluación para este proyecto y evaluador') {
-        mensaje = '⚠️ Ya existe una asignación para este proyecto y evaluador.';
+        mensaje = 'Ya existe una asignación para este proyecto y evaluador.';
       } else if (mensaje === 'Proyecto no encontrado') {
-        mensaje = '❌ Proyecto no encontrado.';
+        mensaje = 'Proyecto no encontrado.';
         statusCode = 404;
       } else if (mensaje === 'Evaluador no encontrado') {
-        mensaje = '❌ Evaluador no encontrado.';
+        mensaje = 'Evaluador no encontrado.';
         statusCode = 404;
       }
 

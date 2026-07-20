@@ -3,10 +3,6 @@ const db = require('../config/db');
 
 const evaluacionController = {
 
-  // ============================================
-  // MÉTODOS EXISTENTES
-  // ============================================
-
   async getAll(req, res) {
     try {
       const data = await EvaluacionService.getTodosResultados();
@@ -172,7 +168,7 @@ const evaluacionController = {
         mensaje: 'No se encontró el formulario'
       });
     } catch (err) {
-      console.error("❌ ERROR FORMULARIO:", err);
+      console.error("ERROR FORMULARIO:", err);
       return res.status(500).json({
         ok: false,
         mensaje: "Error al obtener formulario: " + err.message
@@ -255,10 +251,6 @@ const evaluacionController = {
       });
     }
   },
-
-  // ============================================
-  // NUEVOS MÉTODOS PARA EDICIÓN
-  // ============================================
 
   async getEvaluacionParaEditar(req, res) {
     try {

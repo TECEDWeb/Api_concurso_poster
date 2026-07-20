@@ -8,7 +8,7 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h';
 const SALT_ROUNDS = 10;
 
 if (!JWT_SECRET) {
-  console.warn('⚠️  JWT_SECRET no está definido en las variables de entorno.');
+  console.warn('JWT_SECRET no está definido en las variables de entorno.');
 }
 
 const authService = {

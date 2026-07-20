@@ -8,11 +8,11 @@ const dashboardController = {
    */
   async adminDashboard(req, res) {
     try {
-      console.log('🟣 DASHBOARD ADMIN INICIADO');
+      console.log('DASHBOARD ADMIN INICIADO');
 
       const data = await dashboardService.getAdminStats();
 
-      console.log('🟢 DATA DASHBOARD:', data);
+      console.log('DATA DASHBOARD:', data);
 
       // Mapear los campos para que coincidan con lo que espera el frontend
       const responseData = {
@@ -31,7 +31,7 @@ const dashboardController = {
       });
 
     } catch (error) {
-      console.error('🔴 ERROR DASHBOARD:', error);
+      console.error('ERROR DASHBOARD:', error);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al cargar dashboard',
@@ -53,7 +53,7 @@ const dashboardController = {
    */
   async actividadesRecientes(req, res) {
     try {
-      console.log('🟣 ACTIVIDADES RECIENTES INICIADO');
+      console.log('ACTIVIDADES RECIENTES INICIADO');
 
       const actividades = await dashboardService.getActividadesRecientes();
 
@@ -63,7 +63,7 @@ const dashboardController = {
       });
 
     } catch (error) {
-      console.error('🔴 ERROR ACTIVIDADES RECIENTES:', error);
+      console.error('ERROR ACTIVIDADES RECIENTES:', error);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al cargar actividades recientes'
@@ -76,7 +76,7 @@ const dashboardController = {
    */
   async notificaciones(req, res) {
     try {
-      console.log('🟣 NOTIFICACIONES INICIADO');
+      console.log('NOTIFICACIONES INICIADO');
 
       const notificaciones = await dashboardService.getNotificaciones(req.usuario.id);
 
@@ -86,7 +86,7 @@ const dashboardController = {
       });
 
     } catch (error) {
-      console.error('🔴 ERROR NOTIFICACIONES:', error);
+      console.error('ERROR NOTIFICACIONES:', error);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al cargar notificaciones'
@@ -99,7 +99,7 @@ const dashboardController = {
    */
   async contarNotificaciones(req, res) {
     try {
-      console.log('🟣 CONTAR NOTIFICACIONES INICIADO');
+      console.log('CONTAR NOTIFICACIONES INICIADO');
 
       const count = await dashboardService.contarNotificaciones(req.usuario.id);
 
@@ -109,7 +109,7 @@ const dashboardController = {
       });
 
     } catch (error) {
-      console.error('🔴 ERROR CONTAR NOTIFICACIONES:', error);
+      console.error('ERROR CONTAR NOTIFICACIONES:', error);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al contar notificaciones'
@@ -122,7 +122,7 @@ const dashboardController = {
    */
   async marcarNotificacionesLeidas(req, res) {
     try {
-      console.log('🟣 MARCAR NOTIFICACIONES LEÍDAS INICIADO');
+      console.log('MARCAR NOTIFICACIONES LEÍDAS INICIADO');
 
       await dashboardService.marcarNotificacionesLeidas(req.usuario.id);
 
@@ -132,7 +132,7 @@ const dashboardController = {
       });
 
     } catch (error) {
-      console.error('🔴 ERROR MARCAR NOTIFICACIONES:', error);
+      console.error('ERROR MARCAR NOTIFICACIONES:', error);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al marcar notificaciones'

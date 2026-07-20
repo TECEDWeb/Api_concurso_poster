@@ -8,7 +8,7 @@ const evaluadorController = {
   async getDashboardStats(req, res) {
     try {
       const evaluadorId = req.usuario.id;
-      console.log('📊 Dashboard stats para evaluador:', evaluadorId);
+      console.log('Dashboard stats para evaluador:', evaluadorId);
 
       // Obtener proyectos asignados al evaluador
       const [asignaciones] = await db.query(`
@@ -38,7 +38,7 @@ const evaluadorController = {
       });
 
     } catch (error) {
-      console.error('❌ ERROR getDashboardStats:', error);
+      console.error('ERROR getDashboardStats:', error);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al obtener estadísticas del dashboard'
@@ -52,7 +52,7 @@ const evaluadorController = {
   async getActividadesRecientes(req, res) {
     try {
       const evaluadorId = req.usuario.id;
-      console.log('📋 Actividades recientes para evaluador:', evaluadorId);
+      console.log('Actividades recientes para evaluador:', evaluadorId);
 
       // Obtener evaluaciones recientes
       const [evaluaciones] = await db.query(`
@@ -122,7 +122,7 @@ const evaluadorController = {
       });
 
     } catch (error) {
-      console.error('❌ ERROR getActividadesRecientes:', error);
+      console.error('ERROR getActividadesRecientes:', error);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al obtener actividades recientes'
@@ -136,7 +136,7 @@ const evaluadorController = {
   async getProyectosAsignados(req, res) {
     try {
       const evaluadorId = req.usuario.id;
-      console.log('📋 Proyectos asignados para evaluador:', evaluadorId);
+      console.log('Proyectos asignados para evaluador:', evaluadorId);
 
       const [proyectos] = await db.query(`
         SELECT 
@@ -186,7 +186,7 @@ const evaluadorController = {
       });
 
     } catch (error) {
-      console.error('❌ ERROR getProyectosAsignados:', error);
+      console.error('ERROR getProyectosAsignados:', error);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al obtener proyectos asignados'
@@ -229,7 +229,7 @@ const evaluadorController = {
       });
 
     } catch (error) {
-      console.error('❌ ERROR getProyectoAsignado:', error);
+      console.error('ERROR getProyectoAsignado:', error);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al obtener proyecto'
@@ -245,7 +245,7 @@ const evaluadorController = {
       const evaluadorId = req.usuario.id;
       const { evaluacionId, detalles, observacion } = req.body;
 
-      console.log('📝 Guardando evaluación:', { evaluacionId, detalles, observacion });
+      console.log('Guardando evaluación:', { evaluacionId, detalles, observacion });
 
       // Actualizar evaluación
       await db.query(`
@@ -270,7 +270,7 @@ const evaluadorController = {
       });
 
     } catch (error) {
-      console.error('❌ ERROR guardarEvaluacion:', error);
+      console.error('ERROR guardarEvaluacion:', error);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al guardar la evaluación'
@@ -322,7 +322,7 @@ const evaluadorController = {
       });
 
     } catch (error) {
-      console.error('❌ ERROR getMisResultados:', error);
+      console.error('ERROR getMisResultados:', error);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al obtener resultados'
@@ -383,7 +383,7 @@ const evaluadorController = {
       });
 
     } catch (error) {
-      console.error('❌ ERROR getResultadoDetalle:', error);
+      console.error('ERROR getResultadoDetalle:', error);
       return res.status(500).json({
         ok: false,
         mensaje: 'Error al obtener detalle del resultado'

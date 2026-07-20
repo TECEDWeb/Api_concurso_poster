@@ -5,7 +5,7 @@ const authMiddleware = require('../middleware/authMiddleware');
 const roleMiddleware = require('../middleware/roleMiddleware');
 
 console.log('======================================');
-console.log('✅ proyectoRoutes.js CARGADO');
+console.log('proyectoRoutes.js CARGADO');
 console.log('======================================');
 
 router.get('/', authMiddleware, roleMiddleware('admin'), controller.getAll);

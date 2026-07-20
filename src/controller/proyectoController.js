@@ -7,7 +7,7 @@ const proyectoController = {
       const proyectos = await ProyectoService.getAll();
       return res.json({ ok: true, data: proyectos });
     } catch (error) {
-      console.error('❌ ERROR get proyectos:', error);
+      console.error('ERROR get proyectos:', error);
       return res.status(500).json({ ok: false, mensaje: 'Error al obtener proyectos: ' + error.message });
     }
   },
@@ -23,7 +23,7 @@ const proyectoController = {
 
       return res.json({ ok: true, data: proyecto });
     } catch (error) {
-      console.error('❌ ERROR get proyecto:', error);
+      console.error('ERROR get proyecto:', error);
       return res.status(500).json({ ok: false, mensaje: 'Error al obtener proyecto: ' + error.message });
     }
   },
@@ -68,7 +68,7 @@ const proyectoController = {
       return res.status(201).json({ ok: true, mensaje: 'Proyecto creado correctamente', data: proyecto });
 
     } catch (error) {
-      console.error('❌ ERROR CREATE PROYECTO:', error);
+      console.error('ERROR CREATE PROYECTO:', error);
       return res.status(500).json({ ok: false, mensaje: 'Error al crear proyecto: ' + error.message });
     }
   },
@@ -107,7 +107,7 @@ const proyectoController = {
       return res.json({ ok: true, mensaje: 'Proyecto actualizado correctamente', data: proyectoActualizado });
 
     } catch (error) {
-      console.error('❌ ERROR UPDATE PROYECTO:', error);
+      console.error('ERROR UPDATE PROYECTO:', error);
       return res.status(500).json({ ok: false, mensaje: 'Error al actualizar proyecto: ' + error.message });
     }
   },
@@ -126,7 +126,7 @@ const proyectoController = {
       return res.json({ ok: true, mensaje: 'Proyecto eliminado correctamente' });
 
     } catch (error) {
-      console.error('❌ ERROR DELETE PROYECTO:', error);
+      console.error('ERROR DELETE PROYECTO:', error);
 
       if (error.code === 'ER_ROW_IS_REFERENCED_2' || error.errno === 1451) {
         return res.status(409).json({

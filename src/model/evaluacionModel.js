@@ -2,7 +2,6 @@ const pool = require('../config/db');
 
 const evaluacionModel = {
 
-  // 🔹 todas las evaluaciones (admin)
   async getAll() {
     const [rows] = await pool.query(`
       SELECT * FROM evaluaciones
@@ -11,7 +10,6 @@ const evaluacionModel = {
     return rows;
   },
 
-  // 🔹 evaluaciones por evaluador
   async getByEvaluador(evaluadorId) {
     const [rows] = await pool.query(`
       SELECT e.*, p.nombre AS proyecto_nombre
@@ -23,7 +21,6 @@ const evaluacionModel = {
     return rows;
   },
 
-  // 🔹 evaluaciones por proyecto
   async getByProyecto(proyectoId) {
     const [rows] = await pool.query(`
       SELECT * FROM evaluaciones
@@ -33,7 +30,6 @@ const evaluacionModel = {
     return rows;
   },
 
-  // 🔹 crear evaluación
   async create({ proyectoId, evaluadorId, criterios }) {
 
     const promedio = calcularPromedio(criterios);
@@ -53,7 +49,6 @@ const evaluacionModel = {
     };
   },
 
-  // 🔹 asignados al evaluador (IMPORTANTE PARA TU APP)
   async getAsignados(evaluadorId) {
     const [rows] = await pool.query(`
       SELECT

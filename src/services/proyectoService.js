@@ -62,10 +62,6 @@ const ProyectoService = {
     return { ...proyecto, participantes, tutores };
   },
 
-  /**
-   * data.participantes: string[] (nombres, sin jerarquía, sin límite)
-   * data.tutores: string[] (nombres; el primero es el "tutor encargado", máximo 4)
-   */
   async create(data) {
     const { concurso_id, nombre, descripcion, nivel, area, activo, participantes, tutores } = data;
 
@@ -109,7 +105,7 @@ const ProyectoService = {
 
     } catch (error) {
       await connection.rollback();
-      console.error('❌ ERROR create proyecto (transacción):', error);
+      console.error('ERROR create proyecto (transacción):', error);
       throw error;
     } finally {
       connection.release();
@@ -157,18 +153,13 @@ const ProyectoService = {
 
     } catch (error) {
       await connection.rollback();
-      console.error('❌ ERROR update proyecto (transacción):', error);
+      console.error('ERROR update proyecto (transacción):', error);
       throw error;
     } finally {
       connection.release();
     }
   },
-
-  /**
-   * Elimina un proyecto y TODO lo que depende de él, en cascada.
-   * tutores tiene ON DELETE CASCADE en su FK, pero participantes,
-   * evaluaciones y asignaciones se borran explícitamente por seguridad.
-   */
+  
   async delete(id) {
     const connection = await db.getConnection();
 
@@ -193,7 +184,7 @@ const ProyectoService = {
 
     } catch (error) {
       await connection.rollback();
-      console.error('❌ ERROR en cascada al eliminar proyecto:', error);
+      console.error('ERROR en cascada al eliminar proyecto:', error);
       throw error;
     } finally {
       connection.release();

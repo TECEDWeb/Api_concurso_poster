@@ -184,7 +184,7 @@ const authController = {
       try {
         await enviarCorreoRecuperacion(usuario.email, usuario.nombre, enlace);
       } catch (mailError) {
-        console.error('❌ Error enviando correo de recuperación:', mailError);
+        console.error('Error enviando correo de recuperación:', mailError);
       }
 
       return res.json(respuestaGenerica);
