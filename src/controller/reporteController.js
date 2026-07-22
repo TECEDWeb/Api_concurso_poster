@@ -19,6 +19,102 @@ function nombreSeguro(nombre) {
     .replace(/\s+/g, '-');
 }
 
+// ============================================
+// HELPER NUEVO: participantes y tutores
+// ============================================
+// ⚠️ Verifica que los nombres de tabla/columna coincidan con tu BD real.
+// Se asume: tabla `participantes` (id, proyecto_id, nombre, cedula, email)
+//           tabla `tutores` (id, proyecto_id, nombre, encargado, cedula, email)
+
+/**
+ * Trae participantes y tutores de VARIOS proyectos a la vez (para listas),
+ * agrupados por proyecto_id, evitando hacer una consulta por proyecto.
+ */
+async function obtenerPersonasPorProyectos(proyectoIds) {
+  if (!proyectoIds || proyectoIds.length === 0) {
+    return { participantesPorProyecto: {}, tutoresPorProyecto: {} };
+  }
+
+  const [participantesRows] = await db.query(
+    `SELECT proyecto_id, id, nombre, cedula, email
+     FROM participantes
+     WHERE proyecto_id IN (?)`,
+    [proyectoIds]
+  );
+
+  const [tutoresRows] = await db.query(
+    `SELECT proyecto_id, id, nombre, encargado, cedula, email
+     FROM tutores
+     WHERE proyecto_id IN (?)`,
+    [proyectoIds]
+  );
+
+  const participantesPorProyecto = {};
+  participantesRows.forEach(p => {
+    if (!participantesPorProyecto[p.proyecto_id]) {
+      participantesPorProyecto[p.proyecto_id] = [];
+    }
+    participantesPorProyecto[p.proyecto_id].push({
+      id: p.id,
+      nombre: p.nombre,
+      cedula: p.cedula || null,
+      email: p.email || null
+    });
+  });
+
+  const tutoresPorProyecto = {};
+  tutoresRows.forEach(t => {
+    if (!tutoresPorProyecto[t.proyecto_id]) {
+      tutoresPorProyecto[t.proyecto_id] = [];
+    }
+    tutoresPorProyecto[t.proyecto_id].push({
+      id: t.id,
+      nombre: t.nombre,
+      encargado: t.encargado === 1 || t.encargado === true,
+      cedula: t.cedula || null,
+      email: t.email || null
+    });
+  });
+
+  return { participantesPorProyecto, tutoresPorProyecto };
+}
+
+/**
+ * Trae participantes y tutores de UN solo proyecto (para el detalle).
+ */
+async function obtenerPersonasDeProyecto(proyectoId) {
+  const [participantesRows] = await db.query(
+    `SELECT id, nombre, cedula, email
+     FROM participantes
+     WHERE proyecto_id = ?`,
+    [proyectoId]
+  );
+
+  const [tutoresRows] = await db.query(
+    `SELECT id, nombre, encargado, cedula, email
+     FROM tutores
+     WHERE proyecto_id = ?`,
+    [proyectoId]
+  );
+
+  const participantes = participantesRows.map(p => ({
+    id: p.id,
+    nombre: p.nombre,
+    cedula: p.cedula || null,
+    email: p.email || null
+  }));
+
+  const tutores = tutoresRows.map(t => ({
+    id: t.id,
+    nombre: t.nombre,
+    encargado: t.encargado === 1 || t.encargado === true,
+    cedula: t.cedula || null,
+    email: t.email || null
+  }));
+
+  return { participantes, tutores };
+}
+
 // Colores institucionales UPSE en formato RGB (0-255) para jsPDF
 const COLOR_AZUL = [0, 51, 102];
 const COLOR_GRIS = [100, 116, 139];
@@ -34,14 +130,12 @@ function generarPdfBuffer({ titulo, subtitulo, descripcion, estadisticas, tablaT
   const pageWidth = doc.internal.pageSize.getWidth();
   let y = 50;
 
-  // Título
   doc.setFontSize(18);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...COLOR_AZUL);
   doc.text(titulo, pageWidth / 2, y, { align: 'center' });
   y += 22;
 
-  // Subtítulo(s)
   doc.setFontSize(11);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...COLOR_GRIS);
@@ -63,7 +157,6 @@ function generarPdfBuffer({ titulo, subtitulo, descripcion, estadisticas, tablaT
     y += lineas.length * 12 + 10;
   }
 
-  // Bloque de estadísticas
   if (estadisticas && estadisticas.length) {
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
@@ -81,7 +174,6 @@ function generarPdfBuffer({ titulo, subtitulo, descripcion, estadisticas, tablaT
     y += 10;
   }
 
-  // Tabla
   if (tablaFilas && tablaFilas.length) {
     if (tablaTitulo) {
       doc.setFontSize(12);
@@ -109,7 +201,6 @@ function generarPdfBuffer({ titulo, subtitulo, descripcion, estadisticas, tablaT
     y += 50;
   }
 
-  // Footer
   doc.setFontSize(9);
   doc.setTextColor(...COLOR_GRIS);
   doc.text(
@@ -205,6 +296,9 @@ exports.proyectos = async (req, res) => {
       SELECT
         p.id,
         p.nombre AS proyecto,
+        p.area,
+        p.nivel,
+        p.concurso_id AS concursoId,
         COUNT(DISTINCT e.id) AS evaluaciones,
         ROUND(AVG(n.puntaje), 2) AS promedio,
         u.nombre AS evaluador,
@@ -215,20 +309,26 @@ exports.proyectos = async (req, res) => {
       LEFT JOIN detalles_evaluacion d ON d.evaluacion_id = e.id
       LEFT JOIN niveles n ON n.id = d.nivel_id
       LEFT JOIN usuarios u ON u.id = e.evaluador_id
-      GROUP BY p.id, p.nombre, u.id, u.nombre, u.rol
+      GROUP BY p.id, p.nombre, p.area, p.nivel, p.concurso_id, u.id, u.nombre, u.rol
       ORDER BY p.nombre ASC
     `);
 
     const proyectos = [];
     rows.forEach(row => {
-      let proyecto = proyectos.find(item => item.proyecto === row.proyecto);
+      let proyecto = proyectos.find(item => item.id === row.id);
       if (!proyecto) {
         proyecto = {
           id: row.id,
           proyecto: row.proyecto,
+          area: row.area || null,
+          nivel: row.nivel || null,
+          concursoId: row.concursoId || null,
           evaluaciones: num(row.evaluaciones),
           promedio: num(row.promedio),
-          evaluadores: []
+          evaluadores: [],
+          // Se rellenan después con obtenerPersonasPorProyectos()
+          participantes: [],
+          tutores: []
         };
         proyectos.push(proyecto);
       }
@@ -239,6 +339,16 @@ exports.proyectos = async (req, res) => {
           puntaje: num(row.puntaje)
         });
       }
+    });
+
+    // ← NUEVO: cargar tutores y participantes de todos los proyectos
+    // en una sola consulta (evita N+1 queries)
+    const proyectoIds = proyectos.map(p => p.id);
+    const { participantesPorProyecto, tutoresPorProyecto } = await obtenerPersonasPorProyectos(proyectoIds);
+
+    proyectos.forEach(p => {
+      p.participantes = participantesPorProyecto[p.id] || [];
+      p.tutores = tutoresPorProyecto[p.id] || [];
     });
 
     return res.json({ ok: true, data: proyectos });
@@ -409,7 +519,7 @@ exports.detalleProyecto = async (req, res) => {
     const proyectoId = parseInt(req.params.proyectoId);
 
     const [proyectos] = await db.query(
-      `SELECT id, nombre, descripcion FROM proyectos WHERE id = ?`,
+      `SELECT id, nombre, descripcion, area, nivel, concurso_id AS concursoId FROM proyectos WHERE id = ?`,
       [proyectoId]
     );
 
@@ -477,14 +587,22 @@ exports.detalleProyecto = async (req, res) => {
       ) AS puntajes
     `, [proyectoId]);
 
+    // ← NUEVO: tutores y participantes de este proyecto
+    const { participantes, tutores } = await obtenerPersonasDeProyecto(proyectoId);
+
     return res.json({
       ok: true,
       data: {
         id: proyecto.id,
         nombre: proyecto.nombre,
         descripcion: proyecto.descripcion || '',
+        area: proyecto.area || null,
+        nivel: proyecto.nivel || null,
+        concursoId: proyecto.concursoId || null,
         evaluaciones,
         evaluadores,
+        participantes,
+        tutores,
         promedio: num(promedioResult[0]?.promedio),
         totalEvaluaciones: evaluaciones.length
       }
@@ -691,7 +809,7 @@ exports.exportarPDFProyecto = async (req, res) => {
         `Total de evaluadores: ${totalEvaluadores}`,
         `Puntaje total: ${puntajeTotal.toFixed(2)} pts`,
         `Promedio general: ${promedioGeneral.toFixed(2)} pts`
-      ] : [],
+      ] : [], 
       tablaTitulo: rows.length ? 'Evaluadores' : null,
       tablaHeaders: ['Evaluador', 'Rol', 'Puntaje', 'Promedio'],
       tablaFilas: rows.map(r => [
