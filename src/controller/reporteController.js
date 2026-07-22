@@ -20,16 +20,8 @@ function nombreSeguro(nombre) {
 }
 
 // ============================================
-// HELPER NUEVO: participantes y tutores
+// HELPER: participantes y tutores
 // ============================================
-// ⚠️ Verifica que los nombres de tabla/columna coincidan con tu BD real.
-// Se asume: tabla `participantes` (id, proyecto_id, nombre, cedula, email)
-//           tabla `tutores` (id, proyecto_id, nombre, encargado, cedula, email)
-
-/**
- * Trae participantes y tutores de VARIOS proyectos a la vez (para listas),
- * agrupados por proyecto_id, evitando hacer una consulta por proyecto.
- */
 async function obtenerPersonasPorProyectos(proyectoIds) {
   if (!proyectoIds || proyectoIds.length === 0) {
     return { participantesPorProyecto: {}, tutoresPorProyecto: {} };
@@ -79,9 +71,6 @@ async function obtenerPersonasPorProyectos(proyectoIds) {
   return { participantesPorProyecto, tutoresPorProyecto };
 }
 
-/**
- * Trae participantes y tutores de UN solo proyecto (para el detalle).
- */
 async function obtenerPersonasDeProyecto(proyectoId) {
   const [participantesRows] = await db.query(
     `SELECT id, nombre, cedula, email
@@ -121,10 +110,6 @@ const COLOR_GRIS = [100, 116, 139];
 const COLOR_GRIS_CLARO = [248, 250, 252];
 const COLOR_BLANCO = [255, 255, 255];
 
-/**
- * Genera un buffer PDF a partir de un título, subtítulo, líneas de
- * estadísticas y una tabla, usando jsPDF (compatible con Node/CommonJS).
- */
 function generarPdfBuffer({ titulo, subtitulo, descripcion, estadisticas, tablaTitulo, tablaHeaders, tablaFilas }) {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -290,6 +275,19 @@ exports.ranking = async (req, res) => {
 // =====================================
 // REPORTES POR PROYECTO
 // =====================================
+// ✅ CORREGIDO: antes esta consulta agrupaba por (proyecto, evaluador)
+// y calculaba AVG(n.puntaje) — es decir, el promedio de puntos POR
+// CRITERIO SUELTO (ej. una escala de niveles 1-4), no el puntaje TOTAL
+// de cada evaluación. Además, el campo `promedio` del proyecto se
+// sobrescribía en cada fila, quedando con el valor del último
+// evaluador procesado en vez de un promedio real entre todos.
+//
+// Ahora: se agrupa por EVALUACIÓN (una fila = un evaluador evaluando
+// un proyecto), se calcula SUM(n.puntaje) = puntaje TOTAL de esa
+// evaluación (comparable contra el puntaje_maximo de la rúbrica), y
+// el `promedio` del proyecto es el promedio de esos puntajes totales
+// entre todos los evaluadores. También se agrega `puntajeMaximo` real
+// (desde la tabla `rubricas`) para que el frontend calcule % correcto.
 exports.proyectos = async (req, res) => {
   try {
     const [rows] = await db.query(`
@@ -299,19 +297,26 @@ exports.proyectos = async (req, res) => {
         p.area,
         p.nivel,
         p.concurso_id AS concursoId,
-        COUNT(DISTINCT e.id) AS evaluaciones,
-        ROUND(AVG(n.puntaje), 2) AS promedio,
+        e.id AS evaluacionId,
+        e.estado AS estadoEvaluacion,
         u.nombre AS evaluador,
         u.rol,
-        ROUND(SUM(n.puntaje), 2) AS puntaje
+        ROUND(SUM(n.puntaje), 2) AS puntajeTotalEvaluacion
       FROM proyectos p
       LEFT JOIN evaluaciones e ON e.proyecto_id = p.id
       LEFT JOIN detalles_evaluacion d ON d.evaluacion_id = e.id
       LEFT JOIN niveles n ON n.id = d.nivel_id
       LEFT JOIN usuarios u ON u.id = e.evaluador_id
-      GROUP BY p.id, p.nombre, p.area, p.nivel, p.concurso_id, u.id, u.nombre, u.rol
+      GROUP BY p.id, p.nombre, p.area, p.nivel, p.concurso_id, e.id, e.estado, u.id, u.nombre, u.rol
       ORDER BY p.nombre ASC
     `);
+
+    // Puntaje máximo real de cada rúbrica, por concurso
+    const [rubricas] = await db.query(`SELECT concurso_id, puntaje_maximo FROM rubricas`);
+    const puntajeMaximoPorConcurso = {};
+    rubricas.forEach(r => {
+      puntajeMaximoPorConcurso[r.concurso_id] = num(r.puntaje_maximo);
+    });
 
     const proyectos = [];
     rows.forEach(row => {
@@ -323,26 +328,37 @@ exports.proyectos = async (req, res) => {
           area: row.area || null,
           nivel: row.nivel || null,
           concursoId: row.concursoId || null,
-          evaluaciones: num(row.evaluaciones),
-          promedio: num(row.promedio),
+          puntajeMaximo: puntajeMaximoPorConcurso[row.concursoId] || 100,
+          evaluaciones: 0,
+          promedio: 0,
           evaluadores: [],
-          // Se rellenan después con obtenerPersonasPorProyectos()
           participantes: [],
           tutores: []
         };
         proyectos.push(proyecto);
       }
-      if (row.evaluador) {
+
+      // El LEFT JOIN puede traer una fila "vacía" (evaluacionId null)
+      // si el proyecto todavía no tiene ninguna evaluación asignada.
+      if (row.evaluacionId) {
+        proyecto.evaluaciones++;
         proyecto.evaluadores.push({
           nombre: row.evaluador,
           rol: row.rol,
-          puntaje: num(row.puntaje)
+          puntaje: num(row.puntajeTotalEvaluacion)
         });
       }
     });
 
-    // ← NUEVO: cargar tutores y participantes de todos los proyectos
-    // en una sola consulta (evita N+1 queries)
+    // promedio = promedio de los PUNTAJES TOTALES por evaluador
+    // (no del promedio de criterios sueltos)
+    proyectos.forEach(p => {
+      if (p.evaluadores.length > 0) {
+        const suma = p.evaluadores.reduce((acc, e) => acc + (e.puntaje || 0), 0);
+        p.promedio = Math.round((suma / p.evaluadores.length) * 100) / 100;
+      }
+    });
+
     const proyectoIds = proyectos.map(p => p.id);
     const { participantesPorProyecto, tutoresPorProyecto } = await obtenerPersonasPorProyectos(proyectoIds);
 
@@ -420,7 +436,6 @@ exports.exportar = async (req, res) => {
 exports.exportarProyecto = async (req, res) => {
   try {
     const proyectoId = parseInt(req.params.proyectoId);
-    console.log(`Exportando Excel para proyecto ID: ${proyectoId}`);
 
     const [proyectos] = await db.query(
       `SELECT id, nombre FROM proyectos WHERE id = ?`,
@@ -514,6 +529,8 @@ exports.exportarProyecto = async (req, res) => {
 // =====================================
 // DETALLE DE PROYECTO
 // =====================================
+// (Ya calculaba el promedio correctamente: SUM por evaluación, luego
+// AVG de esas sumas. Solo se agregó el puntajeMaximo real de la rúbrica.)
 exports.detalleProyecto = async (req, res) => {
   try {
     const proyectoId = parseInt(req.params.proyectoId);
@@ -587,7 +604,18 @@ exports.detalleProyecto = async (req, res) => {
       ) AS puntajes
     `, [proyectoId]);
 
-    // ← NUEVO: tutores y participantes de este proyecto
+    // Puntaje máximo real de la rúbrica de este concurso
+    let puntajeMaximo = 100;
+    if (proyecto.concursoId) {
+      const [rubricaRows] = await db.query(
+        `SELECT puntaje_maximo FROM rubricas WHERE concurso_id = ? LIMIT 1`,
+        [proyecto.concursoId]
+      );
+      if (rubricaRows.length > 0) {
+        puntajeMaximo = num(rubricaRows[0].puntaje_maximo) || 100;
+      }
+    }
+
     const { participantes, tutores } = await obtenerPersonasDeProyecto(proyectoId);
 
     return res.json({
@@ -604,6 +632,7 @@ exports.detalleProyecto = async (req, res) => {
         participantes,
         tutores,
         promedio: num(promedioResult[0]?.promedio),
+        puntajeMaximo,
         totalEvaluaciones: evaluaciones.length
       }
     });
