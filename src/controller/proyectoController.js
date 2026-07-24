@@ -28,28 +28,28 @@ const proyectoController = {
     }
   },
 
-  /**
-   * Body esperado: { nombre, descripcion, concursoId, nivel, area, activo,
-   *                   participantes: string[], tutores: string[] }
-   * participantes y tutores son arrays de nombres, tal como los arma
-   * el frontend a partir del texto separado por comas.
-   */
+  // ✅ ACTUALIZADO: participantes opcionales, agregado codigoProyecto
   async create(req, res) {
     try {
-      const { nombre, descripcion, concursoId, nivel, area, activo, participantes, tutores } = req.body;
+      const { 
+        nombre, 
+        descripcion, 
+        concursoId, 
+        nivel, 
+        area, 
+        activo, 
+        codigoProyecto,  // NUEVO
+        participantes = [], 
+        tutores = [] 
+      } = req.body;
 
       if (!nombre || nombre.trim() === '') {
         return res.status(400).json({ ok: false, mensaje: 'El nombre del proyecto es obligatorio' });
       }
 
-      if (!Array.isArray(participantes) || participantes.filter(p => p && p.trim()).length === 0) {
-        return res.status(400).json({ ok: false, mensaje: 'Debe registrar al menos un participante' });
-      }
-
+      // ✅ YA NO validamos que haya al menos un participante
+      // Solo validamos que si hay tutores, no excedan el límite
       const tutoresValidos = Array.isArray(tutores) ? tutores.filter(t => t && t.trim()) : [];
-      if (tutoresValidos.length === 0) {
-        return res.status(400).json({ ok: false, mensaje: 'Debe registrar al menos el tutor encargado' });
-      }
       if (tutoresValidos.length > 4) {
         return res.status(400).json({ ok: false, mensaje: 'Máximo 4 tutores por proyecto' });
       }
@@ -61,8 +61,9 @@ const proyectoController = {
         nivel: nivel || null,
         area: area || null,
         activo: activo !== undefined ? activo : true,
-        participantes,
-        tutores
+        codigo_proyecto: codigoProyecto || null,
+        participantes: participantes || [],
+        tutores: tutores || []
       });
 
       return res.status(201).json({ ok: true, mensaje: 'Proyecto creado correctamente', data: proyecto });
@@ -73,10 +74,21 @@ const proyectoController = {
     }
   },
 
+  // ✅ ACTUALIZADO
   async update(req, res) {
     try {
       const id = parseInt(req.params.id);
-      const { nombre, descripcion, concursoId, nivel, area, activo, participantes, tutores } = req.body;
+      const { 
+        nombre, 
+        descripcion, 
+        concursoId, 
+        nivel, 
+        area, 
+        activo, 
+        codigoProyecto,
+        participantes, 
+        tutores 
+      } = req.body;
 
       if (!nombre || nombre.trim() === '') {
         return res.status(400).json({ ok: false, mensaje: 'El nombre del proyecto es obligatorio' });
@@ -98,8 +110,9 @@ const proyectoController = {
         nivel: nivel !== undefined ? nivel : existente.nivel,
         area: area !== undefined ? area : existente.area,
         activo: activo !== undefined ? activo : existente.activo,
-        participantes,
-        tutores
+        codigo_proyecto: codigoProyecto || existente.codigo_proyecto,
+        participantes: participantes !== undefined ? participantes : existente.participantes?.map(p => p.nombre) || [],
+        tutores: tutores !== undefined ? tutores : existente.tutores?.map(t => t.nombre) || []
       });
 
       const proyectoActualizado = await ProyectoService.getById(id);
