@@ -2,17 +2,32 @@ const db = require('../config/db');
 
 const AsignacionService = {
 
+  /**
+   * Devuelve las asignaciones uniendo con `evaluaciones` para traer:
+   * - Los nombres correctos con el sufijo _nombre (que el frontend espera)
+   * - El evaluacion_id real (necesario para poder editar/reabrir/eliminar
+   *   la evaluación, ya que asignaciones.id y evaluaciones.id son
+   *   secuencias independientes y NO son intercambiables)
+   * - El estado REAL (el de evaluaciones, que sí se actualiza cuando el
+   *   evaluador termina), en vez del estado de asignaciones que se queda
+   *   fijo en 'asignado' para siempre
+   */
   async getAsignaciones() {
     const [rows] = await db.query(`
       SELECT
-        a.id,
-        p.nombre AS proyecto,
-        u.nombre AS evaluador,
-        a.estado,
+        a.id AS asignacion_id,
+        p.id AS proyecto_id,
+        p.nombre AS proyecto_nombre,
+        u.id AS evaluador_id,
+        u.nombre AS evaluador_nombre,
+        e.id AS evaluacion_id,
+        COALESCE(e.estado, a.estado) AS estado,
         a.created_at
       FROM asignaciones a
       INNER JOIN proyectos p ON p.id = a.proyecto_id
       INNER JOIN usuarios u ON u.id = a.evaluador_id
+      LEFT JOIN evaluaciones e
+        ON e.proyecto_id = a.proyecto_id AND e.evaluador_id = a.evaluador_id
       ORDER BY a.created_at DESC
     `);
     return rows;
@@ -68,7 +83,7 @@ const AsignacionService = {
     }
     console.log("Evaluador encontrado");
 
-    // 3. BUSCAR RÚBRICA - CONSULTA CORREGIDA
+    // 3. BUSCAR RÚBRICA
     console.log("Buscando rúbrica para concurso ID:", proyecto.concurso_id);
     const [rubricas] = await db.query(
       `SELECT id FROM rubricas WHERE concurso_id = ? LIMIT 1`,
@@ -84,7 +99,7 @@ const AsignacionService = {
     const rubricaId = rubricas[0].id;
     console.log("Rúbrica ID:", rubricaId);
 
-    // 4. VERIFICAR SECCIONES - CONSULTA CORREGIDA
+    // 4. VERIFICAR SECCIONES
     console.log("Verificando secciones para rúbrica ID:", rubricaId);
     const [secciones] = await db.query(
       `SELECT id FROM secciones WHERE rubrica_id = ? LIMIT 1`,
@@ -97,7 +112,7 @@ const AsignacionService = {
       console.log("La rúbrica no tiene secciones, pero continuamos...");
     }
 
-    // 5. VERIFICAR CRITERIOS - CONSULTA CORREGIDA
+    // 5. VERIFICAR CRITERIOS
     console.log("Verificando criterios para rúbrica ID:", rubricaId);
     const [criterios] = await db.query(
       `SELECT id FROM criterios WHERE rubrica_id = ? LIMIT 1`,
@@ -149,6 +164,12 @@ const AsignacionService = {
     };
   },
 
+  /**
+   * Elimina una asignación por su ID directo de la tabla `asignaciones`.
+   * Se mantiene por compatibilidad, pero el flujo normal de "Quitar
+   * asignación" desde el frontend usa evaluacionService.eliminarEvaluacion,
+   * que ahora también limpia esta tabla automáticamente (ver ese archivo).
+   */
   async eliminar(id) {
     await db.query(`DELETE FROM asignaciones WHERE id = ?`, [id]);
     return true;
