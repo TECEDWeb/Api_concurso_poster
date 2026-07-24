@@ -2,6 +2,7 @@ const db = require('../config/db');
 const ExcelJS = require('exceljs');
 const { jsPDF } = require('jspdf');
 const autoTable = require('jspdf-autotable').default;
+const { calcularPuntajeMaximoReal, calcularPuntajesMaximosPorConcursos } = require('../utils/puntajeMaximo');
 
 // Helper: fuerza a número cualquier valor que MySQL pueda devolver como string
 function num(valor) {
@@ -275,19 +276,10 @@ exports.ranking = async (req, res) => {
 // =====================================
 // REPORTES POR PROYECTO
 // =====================================
-// ✅ CORREGIDO: antes esta consulta agrupaba por (proyecto, evaluador)
-// y calculaba AVG(n.puntaje) — es decir, el promedio de puntos POR
-// CRITERIO SUELTO (ej. una escala de niveles 1-4), no el puntaje TOTAL
-// de cada evaluación. Además, el campo `promedio` del proyecto se
-// sobrescribía en cada fila, quedando con el valor del último
-// evaluador procesado en vez de un promedio real entre todos.
-//
-// Ahora: se agrupa por EVALUACIÓN (una fila = un evaluador evaluando
-// un proyecto), se calcula SUM(n.puntaje) = puntaje TOTAL de esa
-// evaluación (comparable contra el puntaje_maximo de la rúbrica), y
-// el `promedio` del proyecto es el promedio de esos puntajes totales
-// entre todos los evaluadores. También se agrega `puntajeMaximo` real
-// (desde la tabla `rubricas`) para que el frontend calcule % correcto.
+// El promedio se calcula por EVALUACIÓN (una fila = un evaluador
+// evaluando un proyecto): SUM(n.puntaje) = puntaje TOTAL de esa
+// evaluación, comparable contra el puntaje máximo REAL de la rúbrica
+// (calculado dinámicamente, no un valor fijo guardado).
 exports.proyectos = async (req, res) => {
   try {
     const [rows] = await db.query(`
@@ -311,12 +303,12 @@ exports.proyectos = async (req, res) => {
       ORDER BY p.nombre ASC
     `);
 
-    // Puntaje máximo real de cada rúbrica, por concurso
-    const [rubricas] = await db.query(`SELECT concurso_id, puntaje_maximo FROM rubricas`);
-    const puntajeMaximoPorConcurso = {};
-    rubricas.forEach(r => {
-      puntajeMaximoPorConcurso[r.concurso_id] = num(r.puntaje_maximo);
-    });
+    // Puntaje máximo REAL de cada concurso, calculado dinámicamente en
+    // base a los criterios y niveles configurados actualmente (no un
+    // valor fijo guardado al crear la rúbrica). Así, si se agregan o
+    // quitan criterios/niveles, el % de cada proyecto se recalcula solo.
+    const concursoIdsPresentes = rows.map(r => r.concursoId).filter(id => id);
+    const puntajeMaximoPorConcurso = await calcularPuntajesMaximosPorConcursos(concursoIdsPresentes);
 
     const proyectos = [];
     rows.forEach(row => {
@@ -529,8 +521,6 @@ exports.exportarProyecto = async (req, res) => {
 // =====================================
 // DETALLE DE PROYECTO
 // =====================================
-// (Ya calculaba el promedio correctamente: SUM por evaluación, luego
-// AVG de esas sumas. Solo se agregó el puntajeMaximo real de la rúbrica.)
 exports.detalleProyecto = async (req, res) => {
   try {
     const proyectoId = parseInt(req.params.proyectoId);
@@ -604,17 +594,10 @@ exports.detalleProyecto = async (req, res) => {
       ) AS puntajes
     `, [proyectoId]);
 
-    // Puntaje máximo real de la rúbrica de este concurso
-    let puntajeMaximo = 100;
-    if (proyecto.concursoId) {
-      const [rubricaRows] = await db.query(
-        `SELECT puntaje_maximo FROM rubricas WHERE concurso_id = ? LIMIT 1`,
-        [proyecto.concursoId]
-      );
-      if (rubricaRows.length > 0) {
-        puntajeMaximo = num(rubricaRows[0].puntaje_maximo) || 100;
-      }
-    }
+    // Puntaje máximo REAL, calculado dinámicamente según los criterios
+    // y niveles configurados actualmente para este concurso — no el
+    // valor fijo que se guardaba en rubricas.puntaje_maximo.
+    const puntajeMaximo = await calcularPuntajeMaximoReal(proyecto.concursoId);
 
     const { participantes, tutores } = await obtenerPersonasDeProyecto(proyectoId);
 
@@ -657,11 +640,11 @@ exports.detalleEvaluacion = async (req, res) => {
         e.observaciones,
         e.fecha_evaluacion,
         p.nombre AS proyectoNombre,
+        p.concurso_id AS concursoId,
         c.nombre AS concursoNombre,
         u.nombre AS evaluadorNombre,
         u.rol AS evaluadorRol,
-        r.nombre AS rubricaNombre,
-        r.puntaje_maximo AS puntajeMaximo
+        r.nombre AS rubricaNombre
       FROM evaluaciones e
       JOIN proyectos p ON p.id = e.proyecto_id
       LEFT JOIN concursos c ON c.id = p.concurso_id
@@ -675,6 +658,10 @@ exports.detalleEvaluacion = async (req, res) => {
     }
 
     const info = cabecera[0];
+
+    // Puntaje máximo REAL, calculado dinámicamente (no el valor fijo
+    // que estaba guardado en rubricas.puntaje_maximo).
+    const puntajeMaximo = await calcularPuntajeMaximoReal(info.concursoId);
 
     const [detallesRaw] = await db.query(`
       SELECT 
@@ -707,7 +694,7 @@ exports.detalleEvaluacion = async (req, res) => {
         evaluadorNombre: info.evaluadorNombre,
         evaluadorRol: info.evaluadorRol,
         rubricaNombre: info.rubricaNombre,
-        puntajeMaximo: num(info.puntajeMaximo),
+        puntajeMaximo,
         detalles
       }
     });

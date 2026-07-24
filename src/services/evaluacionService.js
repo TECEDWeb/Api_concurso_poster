@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { calcularPuntajeMaximoReal } = require('../utils/puntajeMaximo');
 
 const EvaluacionService = {
 
@@ -149,6 +150,12 @@ const EvaluacionService = {
 
   /**
    * OBTENER PROYECTOS ASIGNADOS
+   *
+   * puntajeMaximo ya NO se lee de concursos.puntaje_maximo (un valor
+   * fijo que se desactualizaba al agregar/quitar criterios o niveles).
+   * Se calcula dinámicamente con calcularPuntajeMaximoReal(), igual
+   * que en el módulo de Reportes, para que sea consistente en toda
+   * la aplicación.
    */
   async getAsignados(evaluadorId) {
     const [rows] = await db.query(
@@ -158,10 +165,10 @@ const EvaluacionService = {
           p.id AS proyectoId,
           p.nombre AS proyectoNombre,
           p.descripcion AS proyectoDescripcion,
+          p.concurso_id AS concursoId,
           c.tipo,
           c.fecha_inicio,
-          c.fecha_fin,
-          c.puntaje_maximo
+          c.fecha_fin
        FROM evaluaciones e
        JOIN proyectos p ON e.proyecto_id = p.id
        LEFT JOIN concursos c ON p.concurso_id = c.id
@@ -169,21 +176,27 @@ const EvaluacionService = {
       [evaluadorId]
     );
 
-    return rows.map(r => ({
-      evaluacionId: r.evaluacionId,
-      yaEvaluado: r.estado === 'evaluado',
-      puedeEditar: r.fecha_fin
-        ? new Date(r.fecha_fin) > new Date()
-        : true,
-      proyecto: {
-        id: r.proyectoId,
-        nombre: r.proyectoNombre,
-        descripcion: r.proyectoDescripcion,
-        tipo: r.tipo ?? null,
-        puntajeMaximo: r.puntaje_maximo ?? null,
-        participantes: []
-      }
+    const resultados = await Promise.all(rows.map(async (r) => {
+      const puntajeMaximo = await calcularPuntajeMaximoReal(r.concursoId);
+
+      return {
+        evaluacionId: r.evaluacionId,
+        yaEvaluado: r.estado === 'evaluado',
+        puedeEditar: r.fecha_fin
+          ? new Date(r.fecha_fin) > new Date()
+          : true,
+        proyecto: {
+          id: r.proyectoId,
+          nombre: r.proyectoNombre,
+          descripcion: r.proyectoDescripcion,
+          tipo: r.tipo ?? null,
+          puntajeMaximo,
+          participantes: []
+        }
+      };
     }));
+
+    return resultados;
   },
 
   /**
