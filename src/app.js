@@ -18,26 +18,45 @@ const evaluadorRoutes = require('./routes/evaluadorRoutes');
 const seccionesRoutes = require('./routes/seccionRoutes');
 const criterioRoutes = require('./routes/criterioRoutes');
 const nivelRoutes = require('./routes/nivelRoutes');
-const logsRoutes = require('./routes/logsRoutes'); // ✅ NUEVO
+const logsRoutes = require('./routes/logsRoutes');
 
 const app = express();
 
 // ============================================
-// CORS
+// ✅ CORS - CONFIGURACIÓN CORREGIDA
 // ============================================
-app.use(cors({
-  origin: [
-    'http://localhost:8100',
-    'http://localhost',
-    'https://evaluacion.teced.org',
-    'https://apievaluacion.teced.org'
-  ],
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Permitir solicitudes sin origen (como Postman)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      'http://localhost:8100',
+      'http://localhost',
+      'https://evaluacion.teced.org',
+      'https://apievaluacion.teced.org'
+    ];
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('Origen bloqueado por CORS:', origin);
+      callback(null, false);
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
-  credentials: true
-}));
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+};
 
-app.options('*', cors());
+// Aplicar CORS a todas las rutas
+app.use(cors(corsOptions));
+
+// Manejar explícitamente OPTIONS para todas las rutas
+app.options('*', cors(corsOptions));
+
 app.use(express.json());
 
 // ============================================
@@ -57,7 +76,7 @@ app.use('/api/evaluador', evaluadorRoutes);
 app.use('/api/secciones', seccionesRoutes);
 app.use('/api/criterios', criterioRoutes);
 app.use('/api/niveles', nivelRoutes);
-app.use('/api/logs', logsRoutes); // ✅ NUEVO - Ruta de logs
+app.use('/api/logs', logsRoutes);
 
 // ============================================
 // HEALTH CHECK
@@ -88,7 +107,7 @@ app.get('/api', (req, res) => {
       reportes: '/api/reportes',
       rubricas: '/api/rubricas',
       asignaciones: '/api/asignaciones',
-      logs: '/api/logs', // ✅ NUEVO
+      logs: '/api/logs',
       health: '/api/health'
     }
   });
