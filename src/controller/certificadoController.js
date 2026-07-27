@@ -3,6 +3,7 @@ const { jsPDF } = require('jspdf');
 const fs = require('fs');
 const path = require('path');
 const config = require('../config/certificadosConfig');
+const LogsService = require('../services/logsService');
 
 function generarCodigo() {
   const year = new Date().getFullYear();
@@ -120,11 +121,6 @@ const certificadosController = {
 
   /**
    * POST /api/certificados/generar (admin)
-   * Body: {
-   *   proyectoId, participanteNombre, participanteCedula, tipoCertificado,
-   *   rol ('participante' | 'tutor'), nombreEvento, categoriaActividad,
-   *   fechaEvento, lugar?, firmantes?
-   * }
    */
   async generar(req, res) {
     try {
@@ -162,9 +158,6 @@ const certificadosController = {
 
       const fechaEventoTexto = formatearFechaLarga(fechaEventoFinal);
 
-      // El texto usa **marcadores** para indicar qué partes van en negrita
-      // dentro del PDF (nombre del evento y tema del proyecto), igual
-      // que en el certificado físico de referencia.
       const contenido =
         `Por su participación en el ${categoriaActividad.trim()} presentado en el ` +
         `**${nombreEvento.trim()}**, con el tema "**${proyecto_nombre}**", realizado en la ` +
@@ -194,6 +187,29 @@ const certificadosController = {
           fechaEmision, lugarFinal, fechaEventoFinal, JSON.stringify(firmantesFinal)
         ]
       );
+
+      // ✅ LOG: Certificado generado
+      try {
+        await LogsService.registrarActividad({
+          usuario: req.usuario,
+          tipo: 'certificado',
+          accion: 'crear',
+          entidad_id: result.insertId,
+          entidad_nombre: `Certificado: ${participanteNombre.trim()}`,
+          descripcion: `Se generó certificado para "${participanteNombre.trim()}" (código: ${codigo})`,
+          detalles: { 
+            proyectoId, 
+            participanteNombre: participanteNombre.trim(),
+            participanteCedula: participanteCedula.trim(),
+            tipoCertificado,
+            codigo
+          },
+          req
+        });
+      } catch (logError) {
+        console.error("Error registrando log:", logError);
+        // No interrumpimos el flujo si falla el log
+      }
 
       return res.status(201).json({
         ok: true,
@@ -297,7 +313,7 @@ const certificadosController = {
       doc.setLineWidth(4);
       doc.line(margin + 10, margin + 10, pageWidth / 2, margin + 10);
 
-      // ===== LOGOS (con respaldo en texto si no existen los archivos) =====
+      // ===== LOGOS =====
       const logoCist = cargarLogoBase64(config.LOGOS.cist);
       const logoUpse = cargarLogoBase64(config.LOGOS.upse);
 
@@ -347,7 +363,7 @@ const certificadosController = {
       doc.text(c.nombre, margin + 82, y);
       y += 34;
 
-      // ===== PÁRRAFO CON NEGRITAS (evento y tema del proyecto) =====
+      // ===== PÁRRAFO CON NEGRITAS =====
       doc.setTextColor(60, 60, 60);
       const finalY = renderTextoConNegritas(
         doc, c.contenido, margin + 60, y, pageWidth - margin * 2 - 120, 13, 19
@@ -361,7 +377,7 @@ const certificadosController = {
       const fechaEmisionTexto = formatearFechaLarga(c.fecha_emision);
       doc.text(`${c.lugar}, ${fechaEmisionTexto}`, pageWidth - margin - 60, y, { align: 'right' });
 
-      // ===== BLOQUE DE FIRMAS (dinámico según cuántos firmantes haya) =====
+      // ===== BLOQUE DE FIRMAS =====
       const firmaY = pageHeight - margin - 75;
       const anchoDisponible = pageWidth - margin * 2 - 80;
       const colWidth = anchoDisponible / firmantes.length;
@@ -428,10 +444,55 @@ const certificadosController = {
   async eliminar(req, res) {
     try {
       const { id } = req.params;
+      
+      // ✅ Obtener datos del certificado antes de eliminar (para el log)
+      let certificadoInfo = null;
+      try {
+        const [certificado] = await db.query(
+          'SELECT nombre, codigo FROM certificados WHERE id = ?',
+          [id]
+        );
+        if (certificado.length > 0) {
+          certificadoInfo = certificado[0];
+        }
+      } catch (logError) {
+        console.error("Error obteniendo datos para log:", logError);
+      }
+
       const [result] = await db.query('DELETE FROM certificados WHERE id = ?', [id]);
 
       if (result.affectedRows === 0) {
         return res.status(404).json({ ok: false, mensaje: 'Certificado no encontrado' });
+      }
+
+      // ✅ LOG: Certificado eliminado
+      try {
+        if (certificadoInfo) {
+          await LogsService.registrarActividad({
+            usuario: req.usuario,
+            tipo: 'certificado',
+            accion: 'eliminar',
+            entidad_id: parseInt(id),
+            entidad_nombre: `Certificado: ${certificadoInfo.nombre}`,
+            descripcion: `Se eliminó el certificado de "${certificadoInfo.nombre}" (código: ${certificadoInfo.codigo})`,
+            detalles: { codigo: certificadoInfo.codigo },
+            req
+          });
+        } else {
+          await LogsService.registrarActividad({
+            usuario: req.usuario,
+            tipo: 'certificado',
+            accion: 'eliminar',
+            entidad_id: parseInt(id),
+            entidad_nombre: `Certificado ID: ${id}`,
+            descripcion: `Se eliminó el certificado ID ${id}`,
+            detalles: { id },
+            req
+          });
+        }
+      } catch (logError) {
+        console.error("Error registrando log:", logError);
+        // No interrumpimos el flujo si falla el log
       }
 
       return res.json({ ok: true, mensaje: 'Certificado eliminado correctamente' });

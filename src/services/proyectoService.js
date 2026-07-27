@@ -62,7 +62,7 @@ const ProyectoService = {
     return { ...proyecto, participantes, tutores };
   },
 
-  // ✅ ACTUALIZADO: participantes opcionales
+
   async create(data) {
     const { 
       concurso_id, 
@@ -79,7 +79,6 @@ const ProyectoService = {
     const listaParticipantes = (participantes || []).filter(n => n && n.trim());
     const listaTutores = (tutores || []).filter(n => n && n.trim()).slice(0, MAX_TUTORES);
 
-    // ✅ Ya NO forzamos al menos un participante
 
     const connection = await db.getConnection();
 
@@ -102,7 +101,6 @@ const ProyectoService = {
 
       const proyectoId = result.insertId;
 
-      // ✅ Insertar participantes SOLO si hay
       for (const nombreParticipante of listaParticipantes) {
         await connection.query(
           `INSERT INTO participantes (proyecto_id, nombre) VALUES (?, ?)`,
@@ -131,7 +129,6 @@ const ProyectoService = {
     }
   },
 
-  // ✅ ACTUALIZADO
   async update(id, data) {
     const { 
       concurso_id, 

@@ -1,4 +1,5 @@
 const EvaluacionService = require('../services/evaluacionService');
+const LogsService = require('../services/logsService');
 const db = require('../config/db');
 
 const evaluacionController = {
@@ -56,11 +57,47 @@ const evaluacionController = {
         });
       }
 
+      // Obtener nombres para el log
+      let proyectoNombre = 'Proyecto';
+      let evaluadorNombre = 'Evaluador';
+      try {
+        const [proyecto] = await db.query(
+          `SELECT nombre FROM proyectos WHERE id = ?`,
+          [proyecto_id]
+        );
+        if (proyecto.length > 0) proyectoNombre = proyecto[0].nombre;
+
+        const [evaluador] = await db.query(
+          `SELECT nombre FROM usuarios WHERE id = ?`,
+          [evaluador_id]
+        );
+        if (evaluador.length > 0) evaluadorNombre = evaluador[0].nombre;
+      } catch (logError) {
+        console.error("Error obteniendo nombres para log:", logError);
+      }
+
       const [result] = await db.query(
         `INSERT INTO evaluaciones (proyecto_id, evaluador_id, rubrica_id, estado, fecha_asignacion)
          VALUES (?, ?, ?, 'asignado', NOW())`,
         [proyecto_id, evaluador_id, rubrica_id]
       );
+
+      // ✅ LOG: Evaluación creada
+      try {
+        await LogsService.registrarActividad({
+          usuario: req.usuario,
+          tipo: 'evaluacion',
+          accion: 'crear',
+          entidad_id: result.insertId,
+          entidad_nombre: `Evaluación: ${proyectoNombre} → ${evaluadorNombre}`,
+          descripcion: `Se creó la evaluación del proyecto "${proyectoNombre}" para el evaluador "${evaluadorNombre}"`,
+          detalles: { proyecto_id, evaluador_id, rubrica_id },
+          req
+        });
+      } catch (logError) {
+        console.error("Error registrando log:", logError);
+        // No interrumpimos el flujo si falla el log
+      }
 
       return res.status(201).json({
         ok: true,
@@ -81,6 +118,24 @@ const evaluacionController = {
       const { id } = req.params;
       const { proyecto_id, evaluador_id, rubrica_id, estado } = req.body;
 
+      // Obtener datos anteriores para el log
+      let evaluacionAntes = null;
+      try {
+        const [evaluacion] = await db.query(
+          `SELECT e.*, p.nombre as proyecto_nombre, u.nombre as evaluador_nombre
+           FROM evaluaciones e
+           JOIN proyectos p ON e.proyecto_id = p.id
+           JOIN usuarios u ON e.evaluador_id = u.id
+           WHERE e.id = ?`,
+          [id]
+        );
+        if (evaluacion.length > 0) {
+          evaluacionAntes = evaluacion[0];
+        }
+      } catch (logError) {
+        console.error("Error obteniendo datos para log:", logError);
+      }
+
       const [existing] = await db.query(
         `SELECT id FROM evaluaciones WHERE id = ?`,
         [id]
@@ -99,6 +154,30 @@ const evaluacionController = {
          WHERE id = ?`,
         [proyecto_id, evaluador_id, rubrica_id, estado, id]
       );
+
+      // ✅ LOG: Evaluación actualizada
+      try {
+        if (evaluacionAntes) {
+          await LogsService.registrarActividad({
+            usuario: req.usuario,
+            tipo: 'evaluacion',
+            accion: 'editar',
+            entidad_id: parseInt(id),
+            entidad_nombre: `Evaluación: ${evaluacionAntes.proyecto_nombre} → ${evaluacionAntes.evaluador_nombre}`,
+            descripcion: `Se actualizó la evaluación del proyecto "${evaluacionAntes.proyecto_nombre}"`,
+            detalles: { 
+              cambios: { 
+                antes: { estado: evaluacionAntes.estado, rubrica_id: evaluacionAntes.rubrica_id }, 
+                despues: { estado: estado, rubrica_id: rubrica_id } 
+              } 
+            },
+            req
+          });
+        }
+      } catch (logError) {
+        console.error("Error registrando log:", logError);
+        // No interrumpimos el flujo si falla el log
+      }
 
       return res.json({
         ok: true,
@@ -179,11 +258,48 @@ const evaluacionController = {
   async guardar(req, res) {
     try {
       const evaluacionId = req.params.id;
+
+      // Obtener datos de la evaluación para el log
+      let evaluacionInfo = null;
+      try {
+        const [evaluacion] = await db.query(
+          `SELECT e.*, p.nombre as proyecto_nombre 
+           FROM evaluaciones e
+           JOIN proyectos p ON e.proyecto_id = p.id
+           WHERE e.id = ?`,
+          [evaluacionId]
+        );
+        if (evaluacion.length > 0) {
+          evaluacionInfo = evaluacion[0];
+        }
+      } catch (logError) {
+        console.error("Error obteniendo datos para log:", logError);
+      }
+
       await EvaluacionService.guardarEvaluacion({
         evaluacionId,
         observacion: req.body.observacion,
         detalles: req.body.detalles
       });
+
+      // ✅ LOG: Evaluación guardada (borrador)
+      try {
+        if (evaluacionInfo) {
+          await LogsService.registrarActividad({
+            usuario: req.usuario,
+            tipo: 'evaluacion',
+            accion: 'guardar',
+            entidad_id: parseInt(evaluacionId),
+            entidad_nombre: `Evaluación: ${evaluacionInfo.proyecto_nombre}`,
+            descripcion: `Se guardó (borrador) la evaluación del proyecto "${evaluacionInfo.proyecto_nombre}"`,
+            detalles: { evaluacionId, tieneObservacion: !!req.body.observacion, totalDetalles: req.body.detalles?.length || 0 },
+            req
+          });
+        }
+      } catch (logError) {
+        console.error("Error registrando log:", logError);
+        // No interrumpimos el flujo si falla el log
+      }
 
       return res.json({
         ok: true,
@@ -236,7 +352,43 @@ const evaluacionController = {
         });
       }
 
+      // Obtener nombres para el log
+      let proyectoNombre = 'Proyecto';
+      let evaluadorNombre = 'Evaluador';
+      try {
+        const [proyecto] = await db.query(
+          `SELECT nombre FROM proyectos WHERE id = ?`,
+          [proyecto_id]
+        );
+        if (proyecto.length > 0) proyectoNombre = proyecto[0].nombre;
+
+        const [evaluador] = await db.query(
+          `SELECT nombre FROM usuarios WHERE id = ?`,
+          [evaluador_id]
+        );
+        if (evaluador.length > 0) evaluadorNombre = evaluador[0].nombre;
+      } catch (logError) {
+        console.error("Error obteniendo nombres para log:", logError);
+      }
+
       const result = await EvaluacionService.asignarProyecto(evaluador_id, proyecto_id);
+
+      // ✅ LOG: Proyecto asignado (desde evaluacionController)
+      try {
+        await LogsService.registrarActividad({
+          usuario: req.usuario,
+          tipo: 'asignacion',
+          accion: 'crear',
+          entidad_id: result?.id || null,
+          entidad_nombre: `Asignación: ${proyectoNombre} → ${evaluadorNombre}`,
+          descripcion: `Se asignó el proyecto "${proyectoNombre}" al evaluador "${evaluadorNombre}" (desde evaluación)`,
+          detalles: { proyecto_id, evaluador_id, fecha_limite },
+          req
+        });
+      } catch (logError) {
+        console.error("Error registrando log:", logError);
+        // No interrumpimos el flujo si falla el log
+      }
 
       return res.json({
         ok: true,
@@ -292,6 +444,23 @@ const evaluacionController = {
       const evaluacionId = req.params.id;
       const evaluadorId = req.usuario.id;
 
+      // Obtener datos de la evaluación para el log
+      let evaluacionInfo = null;
+      try {
+        const [evaluacion] = await db.query(
+          `SELECT e.*, p.nombre as proyecto_nombre 
+           FROM evaluaciones e
+           JOIN proyectos p ON e.proyecto_id = p.id
+           WHERE e.id = ?`,
+          [evaluacionId]
+        );
+        if (evaluacion.length > 0) {
+          evaluacionInfo = evaluacion[0];
+        }
+      } catch (logError) {
+        console.error("Error obteniendo datos para log:", logError);
+      }
+
       const [evaluacion] = await db.query(
         `SELECT evaluador_id, estado FROM evaluaciones WHERE id = ?`,
         [evaluacionId]
@@ -324,6 +493,25 @@ const evaluacionController = {
         detalles: req.body.detalles
       });
 
+      // ✅ LOG: Evaluación actualizada (desde evaluador)
+      try {
+        if (evaluacionInfo) {
+          await LogsService.registrarActividad({
+            usuario: req.usuario,
+            tipo: 'evaluacion',
+            accion: 'editar',
+            entidad_id: parseInt(evaluacionId),
+            entidad_nombre: `Evaluación: ${evaluacionInfo.proyecto_nombre}`,
+            descripcion: `El evaluador actualizó la evaluación del proyecto "${evaluacionInfo.proyecto_nombre}"`,
+            detalles: { evaluacionId, tieneObservacion: !!req.body.observacion, totalDetalles: req.body.detalles?.length || 0 },
+            req
+          });
+        }
+      } catch (logError) {
+        console.error("Error registrando log:", logError);
+        // No interrumpimos el flujo si falla el log
+      }
+
       return res.json(result);
     } catch (err) {
       console.error("ERROR actualizarEvaluacion:", err);
@@ -338,6 +526,23 @@ const evaluacionController = {
     try {
       const evaluacionId = req.params.id;
       const evaluadorId = req.usuario.id;
+
+      // Obtener datos de la evaluación para el log
+      let evaluacionInfo = null;
+      try {
+        const [evaluacion] = await db.query(
+          `SELECT e.*, p.nombre as proyecto_nombre 
+           FROM evaluaciones e
+           JOIN proyectos p ON e.proyecto_id = p.id
+           WHERE e.id = ?`,
+          [evaluacionId]
+        );
+        if (evaluacion.length > 0) {
+          evaluacionInfo = evaluacion[0];
+        }
+      } catch (logError) {
+        console.error("Error obteniendo datos para log:", logError);
+      }
 
       const [evaluacion] = await db.query(
         `SELECT evaluador_id, estado FROM evaluaciones WHERE id = ?`,
@@ -366,6 +571,26 @@ const evaluacionController = {
       }
 
       const result = await EvaluacionService.finalizarEvaluacion(evaluacionId);
+
+      // ✅ LOG: Evaluación finalizada
+      try {
+        if (evaluacionInfo) {
+          await LogsService.registrarActividad({
+            usuario: req.usuario,
+            tipo: 'evaluacion',
+            accion: 'finalizar',
+            entidad_id: parseInt(evaluacionId),
+            entidad_nombre: `Evaluación: ${evaluacionInfo.proyecto_nombre}`,
+            descripcion: `El evaluador finalizó la evaluación del proyecto "${evaluacionInfo.proyecto_nombre}"`,
+            detalles: { evaluacionId, fecha_evaluacion: evaluacionInfo.fecha_evaluacion },
+            req
+          });
+        }
+      } catch (logError) {
+        console.error("Error registrando log:", logError);
+        // No interrumpimos el flujo si falla el log
+      }
+
       return res.json(result);
     } catch (err) {
       console.error("ERROR finalizarEvaluacion:", err);
@@ -379,7 +604,45 @@ const evaluacionController = {
   async reabrirEvaluacion(req, res) {
     try {
       const evaluacionId = req.params.id;
+
+      // Obtener datos de la evaluación para el log
+      let evaluacionInfo = null;
+      try {
+        const [evaluacion] = await db.query(
+          `SELECT e.*, p.nombre as proyecto_nombre 
+           FROM evaluaciones e
+           JOIN proyectos p ON e.proyecto_id = p.id
+           WHERE e.id = ?`,
+          [evaluacionId]
+        );
+        if (evaluacion.length > 0) {
+          evaluacionInfo = evaluacion[0];
+        }
+      } catch (logError) {
+        console.error("Error obteniendo datos para log:", logError);
+      }
+
       const result = await EvaluacionService.reabrirEvaluacion(evaluacionId);
+
+      // ✅ LOG: Evaluación reabierta
+      try {
+        if (evaluacionInfo) {
+          await LogsService.registrarActividad({
+            usuario: req.usuario,
+            tipo: 'evaluacion',
+            accion: 'reabrir',
+            entidad_id: parseInt(evaluacionId),
+            entidad_nombre: `Evaluación: ${evaluacionInfo.proyecto_nombre}`,
+            descripcion: `Se reabrió la evaluación del proyecto "${evaluacionInfo.proyecto_nombre}"`,
+            detalles: { evaluacionId },
+            req
+          });
+        }
+      } catch (logError) {
+        console.error("Error registrando log:", logError);
+        // No interrumpimos el flujo si falla el log
+      }
+
       return res.json(result);
     } catch (err) {
       console.error("ERROR reabrirEvaluacion:", err);
@@ -393,7 +656,56 @@ const evaluacionController = {
   async eliminarEvaluacion(req, res) {
     try {
       const evaluacionId = req.params.id;
+
+      // Obtener datos de la evaluación para el log
+      let evaluacionInfo = null;
+      try {
+        const [evaluacion] = await db.query(
+          `SELECT e.*, p.nombre as proyecto_nombre 
+           FROM evaluaciones e
+           JOIN proyectos p ON e.proyecto_id = p.id
+           WHERE e.id = ?`,
+          [evaluacionId]
+        );
+        if (evaluacion.length > 0) {
+          evaluacionInfo = evaluacion[0];
+        }
+      } catch (logError) {
+        console.error("Error obteniendo datos para log:", logError);
+      }
+
       const result = await EvaluacionService.eliminarEvaluacion(evaluacionId);
+
+      // ✅ LOG: Evaluación eliminada
+      try {
+        if (evaluacionInfo) {
+          await LogsService.registrarActividad({
+            usuario: req.usuario,
+            tipo: 'evaluacion',
+            accion: 'eliminar',
+            entidad_id: parseInt(evaluacionId),
+            entidad_nombre: `Evaluación: ${evaluacionInfo.proyecto_nombre}`,
+            descripcion: `Se eliminó la evaluación del proyecto "${evaluacionInfo.proyecto_nombre}"`,
+            detalles: { evaluacionId },
+            req
+          });
+        } else {
+          await LogsService.registrarActividad({
+            usuario: req.usuario,
+            tipo: 'evaluacion',
+            accion: 'eliminar',
+            entidad_id: parseInt(evaluacionId),
+            entidad_nombre: `Evaluación ID: ${evaluacionId}`,
+            descripcion: `Se eliminó la evaluación ID ${evaluacionId}`,
+            detalles: { evaluacionId },
+            req
+          });
+        }
+      } catch (logError) {
+        console.error("Error registrando log:", logError);
+        // No interrumpimos el flujo si falla el log
+      }
+
       return res.json(result);
     } catch (err) {
       console.error("ERROR eliminarEvaluacion:", err);

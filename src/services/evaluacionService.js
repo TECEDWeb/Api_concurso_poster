@@ -148,15 +148,6 @@ const EvaluacionService = {
 
   },
 
-  /**
-   * OBTENER PROYECTOS ASIGNADOS
-   *
-   * puntajeMaximo ya NO se lee de concursos.puntaje_maximo (un valor
-   * fijo que se desactualizaba al agregar/quitar criterios o niveles).
-   * Se calcula dinámicamente con calcularPuntajeMaximoReal(), igual
-   * que en el módulo de Reportes, para que sea consistente en toda
-   * la aplicación.
-   */
   async getAsignados(evaluadorId) {
     const [rows] = await db.query(
       `SELECT
@@ -199,10 +190,6 @@ const EvaluacionService = {
     return resultados;
   },
 
-  /**
-   * GUARDAR EVALUACIÓN COMPLETA
-   * (cabecera + detalle por criterios)
-   */
   async guardarEvaluacion({ evaluacionId, observacion, detalles }) {
     // 1. actualizar estado
     await db.query(
@@ -432,10 +419,7 @@ const EvaluacionService = {
     connection.release();
   }
 },
-/**
- * REABRIR EVALUACIÓN (ADMIN)
- * Permite al administrador resetear una evaluación para que el evaluador pueda volver a evaluar
- */
+
   async reabrirEvaluacion(evaluacionId) {
     const [evaluacion] = await db.query(
       `SELECT estado FROM evaluaciones WHERE id = ?`,

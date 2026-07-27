@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const LogsService = require('./logsService');
 
 exports.getAdminStats = async () => {
   try {
@@ -81,105 +82,83 @@ exports.getAdminStats = async () => {
 };
 
 /**
- * Obtener actividades recientes
+ * Obtener actividades recientes desde la tabla logs_actividad
  */
 exports.getActividadesRecientes = async (limite = 5) => {
   try {
-    // Obtener evaluaciones recientes
-    const [evaluaciones] = await db.query(`
+    // Usar la tabla logs_actividad
+    const [logs] = await db.query(`
       SELECT 
-        e.id,
-        'evaluacion' AS tipo,
-        p.nombre AS proyecto_nombre,
-        u.nombre AS evaluador_nombre,
-        e.fecha_evaluacion AS fecha
-      FROM evaluaciones e
-      LEFT JOIN proyectos p ON e.proyecto_id = p.id
-      LEFT JOIN usuarios u ON e.evaluador_id = u.id
-      WHERE e.fecha_evaluacion IS NOT NULL
-      ORDER BY e.fecha_evaluacion DESC
+        id,
+        usuario_nombre,
+        usuario_rol,
+        tipo,
+        accion,
+        entidad_nombre,
+        descripcion,
+        created_at as fecha
+      FROM logs_actividad
+      ORDER BY created_at DESC
       LIMIT ?
     `, [limite]);
-
-    // Obtener proyectos recientes
-    const [proyectos] = await db.query(`
-      SELECT 
-        p.id,
-        'proyecto' AS tipo,
-        p.nombre AS proyecto_nombre,
-        c.nombre AS concurso_nombre,
-        p.created_at AS fecha
-      FROM proyectos p
-      LEFT JOIN concursos c ON p.concurso_id = c.id
-      ORDER BY p.created_at DESC
-      LIMIT ?
-    `, [limite]);
-
-    // Combinar y ordenar por fecha
-    const actividades = [...evaluaciones, ...proyectos];
-    actividades.sort((a, b) => {
-      const fechaA = a.fecha ? new Date(a.fecha) : new Date(0);
-      const fechaB = b.fecha ? new Date(b.fecha) : new Date(0);
-      return fechaB - fechaA;
-    });
 
     // Formatear para el frontend
-    return actividades.slice(0, limite).map(act => {
-      if (act.tipo === 'evaluacion') {
-        return {
-          icon: 'document-text-outline',
-          color: 'violet',
-          text: `Evaluación completada: ${act.proyecto_nombre || 'Proyecto'}`,
-          time: formatTimeAgo(act.fecha)
-        };
-      } else {
-        return {
-          icon: 'folder-open-outline',
-          color: 'emerald',
-          text: `Nuevo proyecto: ${act.proyecto_nombre || 'Sin nombre'}`,
-          time: formatTimeAgo(act.fecha)
-        };
-      }
+    return logs.map(log => {
+      const icon = getIconForTipo(log.tipo);
+      const color = getColorForTipo(log.tipo);
+      
+      return {
+        icon: icon,
+        color: color,
+        text: log.descripcion || `${log.usuario_nombre} realizó ${log.accion} ${log.tipo}`,
+        time: formatTimeAgo(log.fecha),
+        // Datos adicionales para el detalle
+        tipo: log.tipo,
+        usuario: log.usuario_nombre,
+        fecha: log.fecha,
+        detalle: log.descripcion,
+        metadata: {
+          accion: log.accion,
+          entidad: log.entidad_nombre,
+          rol: log.usuario_rol
+        }
+      };
     });
 
   } catch (error) {
     console.error('ERROR ACTIVIDADES RECIENTES:', error);
+    // Si la tabla no existe, retornar array vacío
     return [];
   }
 };
 
 /**
- * Obtener notificaciones del usuario
+ * Obtener notificaciones desde logs_actividad
  */
 exports.getNotificaciones = async (usuarioId) => {
   try {
-    // Verificar si existe la tabla notificaciones
-    const [result] = await db.query(`
-      SELECT COUNT(*) AS count 
-      FROM information_schema.tables 
-      WHERE table_schema = 'evaluacion_proyectos' 
-      AND table_name = 'notificaciones'
-    `);
-
-    if (result[0].count === 0) {
-      // Si no existe la tabla, devolver datos mock o vacío
-      return [];
-    }
-
-    const [notificaciones] = await db.query(`
+    const [logs] = await db.query(`
       SELECT 
         id,
-        titulo,
-        mensaje,
-        leida,
-        fecha_creacion AS fecha
-      FROM notificaciones
-      WHERE usuario_id = ?
-      ORDER BY fecha_creacion DESC
+        usuario_nombre,
+        tipo,
+        accion,
+        entidad_nombre,
+        descripcion,
+        created_at as fecha
+      FROM logs_actividad
+      ORDER BY created_at DESC
       LIMIT 20
-    `, [usuarioId]);
+    `);
 
-    return notificaciones || [];
+    // Formatear como notificaciones
+    return logs.map(log => ({
+      icon: getIconForTipo(log.tipo),
+      titulo: log.descripcion || `${log.usuario_nombre} realizó ${log.accion}`,
+      time: formatTimeAgo(log.fecha),
+      text: log.descripcion,
+      tipo: log.tipo
+    }));
 
   } catch (error) {
     console.log('No se pudieron obtener notificaciones:', error.message);
@@ -188,30 +167,16 @@ exports.getNotificaciones = async (usuarioId) => {
 };
 
 /**
- * Contar notificaciones no leídas
+ * Contar notificaciones no leídas (logs del día de hoy)
  */
 exports.contarNotificaciones = async (usuarioId) => {
   try {
-    // Verificar si existe la tabla notificaciones
     const [result] = await db.query(`
-      SELECT COUNT(*) AS count 
-      FROM information_schema.tables 
-      WHERE table_schema = 'evaluacion_proyectos' 
-      AND table_name = 'notificaciones'
+      SELECT COUNT(*) AS total 
+      FROM logs_actividad 
+      WHERE DATE(created_at) = CURDATE()
     `);
-
-    if (result[0].count === 0) {
-      return 0;
-    }
-
-    const [notificaciones] = await db.query(`
-      SELECT COUNT(*) AS count
-      FROM notificaciones
-      WHERE usuario_id = ? AND leida = 0
-    `, [usuarioId]);
-
-    return notificaciones[0].count || 0;
-
+    return result[0].total || 0;
   } catch (error) {
     console.log('No se pudo contar notificaciones:', error.message);
     return 0;
@@ -220,26 +185,57 @@ exports.contarNotificaciones = async (usuarioId) => {
 
 /**
  * Marcar notificaciones como leídas
+ * (No tenemos tabla de leído, solo retornamos éxito)
  */
 exports.marcarNotificacionesLeidas = async (usuarioId) => {
   try {
-    await db.query(`
-      UPDATE notificaciones
-      SET leida = 1
-      WHERE usuario_id = ? AND leida = 0
-    `, [usuarioId]);
-
+    // No hacemos nada porque no tenemos tabla de "leído"
+    // Solo retornamos éxito
     return true;
-
   } catch (error) {
     console.log('No se pudieron marcar notificaciones:', error.message);
     return true;
   }
 };
 
-/**
- * Función auxiliar para formatear tiempo
- */
+// ============================================
+// FUNCIONES HELPER
+// ============================================
+
+function getIconForTipo(tipo) {
+  const icons = {
+    'usuario': 'person-add-outline',
+    'concurso': 'trophy-outline',
+    'proyecto': 'folder-open-outline',
+    'asignacion': 'swap-horizontal-outline',
+    'evaluacion': 'checkmark-circle-outline',
+    'rubrica': 'checkbox-outline',
+    'certificado': 'document-text-outline',
+    'seccion': 'layers-outline',
+    'criterio': 'list-outline',
+    'nivel': 'bar-chart-outline',
+    'reporte': 'stats-chart-outline'
+  };
+  return icons[tipo] || 'information-circle-outline';
+}
+
+function getColorForTipo(tipo) {
+  const colors = {
+    'usuario': 'indigo',
+    'concurso': 'gold-upse',
+    'proyecto': 'cyan-upse',
+    'asignacion': 'teal-upse',
+    'evaluacion': 'emerald',
+    'rubrica': 'orange-upse',
+    'certificado': 'blue-upse',
+    'seccion': 'violet',
+    'criterio': 'rose',
+    'nivel': 'amber',
+    'reporte': 'slate'
+  };
+  return colors[tipo] || 'slate';
+}
+
 function formatTimeAgo(fecha) {
   if (!fecha) return 'Recientemente';
   

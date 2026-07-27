@@ -3,6 +3,7 @@ const ExcelJS = require('exceljs');
 const { jsPDF } = require('jspdf');
 const autoTable = require('jspdf-autotable').default;
 const { calcularPuntajeMaximoReal, calcularPuntajesMaximosPorConcursos } = require('../utils/puntajeMaximo');
+const LogsService = require('../services/logsService');
 
 // Helper: fuerza a número cualquier valor que MySQL pueda devolver como string
 function num(valor) {
@@ -225,6 +226,23 @@ exports.stats = async (req, res) => {
       promedio = 0;
     }
 
+    // ✅ LOG: Estadísticas consultadas (solo si hay datos significativos)
+    try {
+      await LogsService.registrarActividad({
+        usuario: req.usuario,
+        tipo: 'reporte',
+        accion: 'consultar',
+        entidad_id: null,
+        entidad_nombre: 'Estadísticas generales',
+        descripcion: `Consultó estadísticas: ${num(proyectos.total)} proyectos, ${num(evaluaciones.total)} evaluaciones`,
+        detalles: { proyectos: num(proyectos.total), evaluaciones: num(evaluaciones.total), completadas: num(completadas.total), promedio: Math.round(promedio * 10) / 10 },
+        req
+      });
+    } catch (logError) {
+      console.error("Error registrando log:", logError);
+      // No interrumpimos el flujo si falla el log
+    }
+
     return res.json({
       ok: true,
       data: {
@@ -265,6 +283,23 @@ exports.ranking = async (req, res) => {
       promedio: num(r.promedio)
     }));
 
+    // ✅ LOG: Ranking consultado
+    try {
+      await LogsService.registrarActividad({
+        usuario: req.usuario,
+        tipo: 'reporte',
+        accion: 'consultar',
+        entidad_id: null,
+        entidad_nombre: 'Ranking de proyectos',
+        descripcion: `Consultó ranking de ${rows.length} proyectos`,
+        detalles: { totalProyectos: rows.length },
+        req
+      });
+    } catch (logError) {
+      console.error("Error registrando log:", logError);
+      // No interrumpimos el flujo si falla el log
+    }
+
     return res.json({ ok: true, data });
 
   } catch (error) {
@@ -276,10 +311,6 @@ exports.ranking = async (req, res) => {
 // =====================================
 // REPORTES POR PROYECTO
 // =====================================
-// El promedio se calcula por EVALUACIÓN (una fila = un evaluador
-// evaluando un proyecto): SUM(n.puntaje) = puntaje TOTAL de esa
-// evaluación, comparable contra el puntaje máximo REAL de la rúbrica
-// (calculado dinámicamente, no un valor fijo guardado).
 exports.proyectos = async (req, res) => {
   try {
     const [rows] = await db.query(`
@@ -303,10 +334,6 @@ exports.proyectos = async (req, res) => {
       ORDER BY p.nombre ASC
     `);
 
-    // Puntaje máximo REAL de cada concurso, calculado dinámicamente en
-    // base a los criterios y niveles configurados actualmente (no un
-    // valor fijo guardado al crear la rúbrica). Así, si se agregan o
-    // quitan criterios/niveles, el % de cada proyecto se recalcula solo.
     const concursoIdsPresentes = rows.map(r => r.concursoId).filter(id => id);
     const puntajeMaximoPorConcurso = await calcularPuntajesMaximosPorConcursos(concursoIdsPresentes);
 
@@ -330,8 +357,6 @@ exports.proyectos = async (req, res) => {
         proyectos.push(proyecto);
       }
 
-      // El LEFT JOIN puede traer una fila "vacía" (evaluacionId null)
-      // si el proyecto todavía no tiene ninguna evaluación asignada.
       if (row.evaluacionId) {
         proyecto.evaluaciones++;
         proyecto.evaluadores.push({
@@ -342,8 +367,6 @@ exports.proyectos = async (req, res) => {
       }
     });
 
-    // promedio = promedio de los PUNTAJES TOTALES por evaluador
-    // (no del promedio de criterios sueltos)
     proyectos.forEach(p => {
       if (p.evaluadores.length > 0) {
         const suma = p.evaluadores.reduce((acc, e) => acc + (e.puntaje || 0), 0);
@@ -358,6 +381,24 @@ exports.proyectos = async (req, res) => {
       p.participantes = participantesPorProyecto[p.id] || [];
       p.tutores = tutoresPorProyecto[p.id] || [];
     });
+
+    // ✅ LOG: Reporte de proyectos consultado
+    try {
+      const totalEvaluadores = proyectos.reduce((acc, p) => acc + p.evaluadores.length, 0);
+      await LogsService.registrarActividad({
+        usuario: req.usuario,
+        tipo: 'reporte',
+        accion: 'consultar',
+        entidad_id: null,
+        entidad_nombre: 'Reporte de proyectos',
+        descripcion: `Consultó reporte de ${proyectos.length} proyectos con ${totalEvaluadores} evaluaciones`,
+        detalles: { totalProyectos: proyectos.length, totalEvaluadores },
+        req
+      });
+    } catch (logError) {
+      console.error("Error registrando log:", logError);
+      // No interrumpimos el flujo si falla el log
+    }
 
     return res.json({ ok: true, data: proyectos });
 
@@ -409,6 +450,23 @@ exports.exportar = async (req, res) => {
 
     sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF003366' } };
     sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+
+    // ✅ LOG: Exportación Excel general
+    try {
+      await LogsService.registrarActividad({
+        usuario: req.usuario,
+        tipo: 'reporte',
+        accion: 'exportar',
+        entidad_id: null,
+        entidad_nombre: 'Exportación Excel general',
+        descripcion: `Exportó reporte general en Excel con ${rows.length} registros`,
+        detalles: { totalRegistros: rows.length, tipo: 'excel' },
+        req
+      });
+    } catch (logError) {
+      console.error("Error registrando log:", logError);
+      // No interrumpimos el flujo si falla el log
+    }
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename=reporte-evaluaciones.xlsx');
@@ -506,6 +564,23 @@ exports.exportarProyecto = async (req, res) => {
       totalRow.height = 25;
     }
 
+    // ✅ LOG: Exportación Excel por proyecto
+    try {
+      await LogsService.registrarActividad({
+        usuario: req.usuario,
+        tipo: 'reporte',
+        accion: 'exportar',
+        entidad_id: proyectoId,
+        entidad_nombre: `Exportación Excel: ${proyecto.nombre}`,
+        descripcion: `Exportó reporte en Excel del proyecto "${proyecto.nombre}" con ${rows.length} evaluadores`,
+        detalles: { proyectoId, totalEvaluadores: rows.length, tipo: 'excel' },
+        req
+      });
+    } catch (logError) {
+      console.error("Error registrando log:", logError);
+      // No interrumpimos el flujo si falla el log
+    }
+
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename=reporte-${nombreSeguro(proyecto.nombre)}.xlsx`);
 
@@ -594,12 +669,26 @@ exports.detalleProyecto = async (req, res) => {
       ) AS puntajes
     `, [proyectoId]);
 
-    // Puntaje máximo REAL, calculado dinámicamente según los criterios
-    // y niveles configurados actualmente para este concurso — no el
-    // valor fijo que se guardaba en rubricas.puntaje_maximo.
     const puntajeMaximo = await calcularPuntajeMaximoReal(proyecto.concursoId);
 
     const { participantes, tutores } = await obtenerPersonasDeProyecto(proyectoId);
+
+    // ✅ LOG: Detalle de proyecto consultado
+    try {
+      await LogsService.registrarActividad({
+        usuario: req.usuario,
+        tipo: 'reporte',
+        accion: 'consultar',
+        entidad_id: proyectoId,
+        entidad_nombre: `Detalle: ${proyecto.nombre}`,
+        descripcion: `Consultó detalle del proyecto "${proyecto.nombre}" con ${evaluaciones.length} evaluaciones`,
+        detalles: { proyectoId, totalEvaluaciones: evaluaciones.length },
+        req
+      });
+    } catch (logError) {
+      console.error("Error registrando log:", logError);
+      // No interrumpimos el flujo si falla el log
+    }
 
     return res.json({
       ok: true,
@@ -658,9 +747,6 @@ exports.detalleEvaluacion = async (req, res) => {
     }
 
     const info = cabecera[0];
-
-    // Puntaje máximo REAL, calculado dinámicamente (no el valor fijo
-    // que estaba guardado en rubricas.puntaje_maximo).
     const puntajeMaximo = await calcularPuntajeMaximoReal(info.concursoId);
 
     const [detallesRaw] = await db.query(`
@@ -681,6 +767,23 @@ exports.detalleEvaluacion = async (req, res) => {
       ...d,
       puntaje: num(d.puntaje)
     }));
+
+    // ✅ LOG: Detalle de evaluación consultado
+    try {
+      await LogsService.registrarActividad({
+        usuario: req.usuario,
+        tipo: 'reporte',
+        accion: 'consultar',
+        entidad_id: evaluacionId,
+        entidad_nombre: `Detalle evaluación: ${info.proyectoNombre}`,
+        descripcion: `Consultó detalle de la evaluación del proyecto "${info.proyectoNombre}" por ${info.evaluadorNombre}`,
+        detalles: { evaluacionId, evaluador: info.evaluadorNombre, proyecto: info.proyectoNombre },
+        req
+      });
+    } catch (logError) {
+      console.error("Error registrando log:", logError);
+      // No interrumpimos el flujo si falla el log
+    }
 
     return res.json({
       ok: true,
@@ -754,6 +857,23 @@ exports.exportarPDF = async (req, res) => {
         r.promedio.toFixed(2)
       ])
     });
+
+    // ✅ LOG: Exportación PDF general
+    try {
+      await LogsService.registrarActividad({
+        usuario: req.usuario,
+        tipo: 'reporte',
+        accion: 'exportar',
+        entidad_id: null,
+        entidad_nombre: 'Exportación PDF general',
+        descripcion: `Exportó reporte general en PDF con ${rows.length} registros`,
+        detalles: { totalRegistros: rows.length, tipo: 'pdf' },
+        req
+      });
+    } catch (logError) {
+      console.error("Error registrando log:", logError);
+      // No interrumpimos el flujo si falla el log
+    }
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=reporte-evaluaciones-${new Date().toISOString().split('T')[0]}.pdf`);
@@ -835,6 +955,23 @@ exports.exportarPDFProyecto = async (req, res) => {
         r.promedio.toFixed(2)
       ])
     });
+
+    // ✅ LOG: Exportación PDF por proyecto
+    try {
+      await LogsService.registrarActividad({
+        usuario: req.usuario,
+        tipo: 'reporte',
+        accion: 'exportar',
+        entidad_id: proyectoId,
+        entidad_nombre: `Exportación PDF: ${proyecto.nombre}`,
+        descripcion: `Exportó reporte en PDF del proyecto "${proyecto.nombre}" con ${rows.length} evaluadores`,
+        detalles: { proyectoId, totalEvaluadores: rows.length, tipo: 'pdf' },
+        req
+      });
+    } catch (logError) {
+      console.error("Error registrando log:", logError);
+      // No interrumpimos el flujo si falla el log
+    }
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=${nombreArchivo}`);

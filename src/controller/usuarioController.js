@@ -1,6 +1,7 @@
 const db = require('../config/db');
 const usuarioModel = require('../model/usuarioModel');
 const bcrypt = require('bcrypt');
+const LogsService = require('../services/logsService');
 
 const usuarioController = {
 
@@ -74,6 +75,23 @@ const usuarioController = {
         departamento
       });
 
+      // ✅ LOG: Usuario creado
+      try {
+        await LogsService.registrarActividad({
+          usuario: req.usuario,
+          tipo: 'usuario',
+          accion: 'crear',
+          entidad_id: id,
+          entidad_nombre: nombre,
+          descripcion: `Se creó el usuario "${nombre}" con rol "${rol}"`,
+          detalles: { cedula, email, rol, departamento },
+          req
+        });
+      } catch (logError) {
+        console.error("Error registrando log:", logError);
+        // No interrumpimos el flujo si falla el log
+      }
+
       return res.json({
         ok: true,
         mensaje: 'Usuario creado correctamente',
@@ -145,6 +163,34 @@ const usuarioController = {
 
       const usuarioActualizado = await usuarioModel.buscarPorId(id);
 
+      // ✅ LOG: Usuario actualizado
+      try {
+        let cambios = [];
+        if (nombre && nombre !== usuarioExistente.nombre) cambios.push(`nombre: "${usuarioExistente.nombre}" → "${nombre}"`);
+        if (rol && rol !== usuarioExistente.rol) cambios.push(`rol: "${usuarioExistente.rol}" → "${rol}"`);
+        if (activo !== undefined && activo !== usuarioExistente.activo) cambios.push(`estado: ${usuarioExistente.activo ? 'Activo' : 'Inactivo'} → ${activo ? 'Activo' : 'Inactivo'}`);
+        if (email !== undefined && email !== usuarioExistente.email) cambios.push('email actualizado');
+
+        await LogsService.registrarActividad({
+          usuario: req.usuario,
+          tipo: 'usuario',
+          accion: 'editar',
+          entidad_id: parseInt(id),
+          entidad_nombre: nombre || usuarioExistente.nombre,
+          descripcion: `Se actualizó el usuario "${nombre || usuarioExistente.nombre}"${cambios.length > 0 ? ': ' + cambios.join(', ') : ''}`,
+          detalles: { 
+            cambios: { 
+              antes: { nombre: usuarioExistente.nombre, rol: usuarioExistente.rol, activo: usuarioExistente.activo }, 
+              despues: { nombre: nombre || usuarioExistente.nombre, rol: rol || usuarioExistente.rol, activo: activo !== undefined ? activo : usuarioExistente.activo } 
+            } 
+          },
+          req
+        });
+      } catch (logError) {
+        console.error("Error registrando log:", logError);
+        // No interrumpimos el flujo si falla el log
+      }
+
       return res.json({
         ok: true,
         mensaje: 'Usuario actualizado correctamente',
@@ -172,6 +218,7 @@ const usuarioController = {
         });
       }
 
+      const nuevoEstado = !usuarioExistente.activo;
       const actualizado = await usuarioModel.toggleActivo(id);
 
       if (!actualizado) {
@@ -182,6 +229,23 @@ const usuarioController = {
       }
 
       const usuarioActualizado = await usuarioModel.buscarPorId(id);
+
+      // ✅ LOG: Usuario activado/desactivado
+      try {
+        await LogsService.registrarActividad({
+          usuario: req.usuario,
+          tipo: 'usuario',
+          accion: nuevoEstado ? 'activar' : 'desactivar',
+          entidad_id: parseInt(id),
+          entidad_nombre: usuarioExistente.nombre,
+          descripcion: `Se ${nuevoEstado ? 'activó' : 'desactivó'} al usuario "${usuarioExistente.nombre}"`,
+          detalles: { id, nuevoEstado },
+          req
+        });
+      } catch (logError) {
+        console.error("Error registrando log:", logError);
+        // No interrumpimos el flujo si falla el log
+      }
 
       return res.json({
         ok: true,
@@ -242,6 +306,23 @@ const usuarioController = {
         });
       }
 
+      // ✅ LOG: Contraseña reseteada
+      try {
+        await LogsService.registrarActividad({
+          usuario: req.usuario,
+          tipo: 'usuario',
+          accion: 'resetear_password',
+          entidad_id: parseInt(id),
+          entidad_nombre: usuarioExistente.nombre,
+          descripcion: `Se reseteó la contraseña del usuario "${usuarioExistente.nombre}"`,
+          detalles: { id },
+          req
+        });
+      } catch (logError) {
+        console.error("Error registrando log:", logError);
+        // No interrumpimos el flujo si falla el log
+      }
+
       return res.json({
         ok: true,
         mensaje: 'Contraseña reseteada correctamente',
@@ -284,6 +365,23 @@ const usuarioController = {
           ok: false,
           mensaje: 'No se pudo eliminar el usuario'
         });
+      }
+
+      // ✅ LOG: Usuario eliminado
+      try {
+        await LogsService.registrarActividad({
+          usuario: req.usuario,
+          tipo: 'usuario',
+          accion: 'eliminar',
+          entidad_id: parseInt(id),
+          entidad_nombre: usuarioExistente.nombre,
+          descripcion: `Se eliminó al usuario "${usuarioExistente.nombre}"`,
+          detalles: { id, rol: usuarioExistente.rol },
+          req
+        });
+      } catch (logError) {
+        console.error("Error registrando log:", logError);
+        // No interrumpimos el flujo si falla el log
       }
 
       return res.json({

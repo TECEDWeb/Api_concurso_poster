@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const LogsService = require('../services/logsService');
 
 // GET /api/niveles?concursoId=5   → escala global
 // GET /api/niveles?criterioId=40  → override específico
@@ -44,10 +45,57 @@ exports.create = async (req, res) => {
       });
     }
 
+    // Obtener nombre del concurso o criterio para el log
+    let entidadNombre = '';
+    let tipoEntidad = 'concurso';
+    try {
+      if (criterioId) {
+        const [criterio] = await db.query(
+          'SELECT texto FROM criterios WHERE id = ?',
+          [criterioId]
+        );
+        if (criterio.length > 0) {
+          entidadNombre = criterio[0].texto.substring(0, 30);
+          tipoEntidad = 'criterio';
+        }
+      } else {
+        const [concurso] = await db.query(
+          'SELECT nombre FROM concursos WHERE id = ?',
+          [concursoId]
+        );
+        if (concurso.length > 0) {
+          entidadNombre = concurso[0].nombre;
+        }
+      }
+    } catch (logError) {
+      console.error("Error obteniendo nombre para log:", logError);
+    }
+
     const [result] = await db.query(
       'INSERT INTO niveles (concurso_id, nombre, puntaje, descripcion, criterio_id) VALUES (?, ?, ?, ?, ?)',
       [concursoId, nombre.trim(), puntaje, descripcion || null, criterioId || null]
     );
+
+    // ✅ LOG: Nivel creado
+    try {
+      const descripcionLog = criterioId 
+        ? `Se creó el nivel "${nombre.trim()}" para el criterio "${entidadNombre}"`
+        : `Se creó el nivel "${nombre.trim()}" en la escala global del concurso "${entidadNombre}"`;
+      
+      await LogsService.registrarActividad({
+        usuario: req.usuario,
+        tipo: 'nivel',
+        accion: 'crear',
+        entidad_id: result.insertId,
+        entidad_nombre: `Nivel: ${nombre.trim()}`,
+        descripcion: descripcionLog,
+        detalles: { concursoId, nombre: nombre.trim(), puntaje, criterioId: criterioId || null },
+        req
+      });
+    } catch (logError) {
+      console.error("Error registrando log:", logError);
+      // No interrumpimos el flujo si falla el log
+    }
 
     return res.status(201).json({
       ok: true,
@@ -78,6 +126,20 @@ exports.update = async (req, res) => {
       return res.status(400).json({ ok: false, mensaje: 'nombre y puntaje son obligatorios' });
     }
 
+    // Obtener datos del nivel antes de actualizar (para el log)
+    let nivelAntes = null;
+    try {
+      const [nivel] = await db.query(
+        'SELECT nombre, puntaje, concurso_id, criterio_id FROM niveles WHERE id = ?',
+        [id]
+      );
+      if (nivel.length > 0) {
+        nivelAntes = nivel[0];
+      }
+    } catch (logError) {
+      console.error("Error obteniendo datos del nivel:", logError);
+    }
+
     const [result] = await db.query(
       'UPDATE niveles SET nombre = ?, puntaje = ?, descripcion = ? WHERE id = ?',
       [nombre.trim(), puntaje, descripcion || null, id]
@@ -85,6 +147,30 @@ exports.update = async (req, res) => {
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ ok: false, mensaje: 'Nivel no encontrado' });
+    }
+
+    // ✅ LOG: Nivel actualizado
+    try {
+      if (nivelAntes) {
+        await LogsService.registrarActividad({
+          usuario: req.usuario,
+          tipo: 'nivel',
+          accion: 'editar',
+          entidad_id: parseInt(id),
+          entidad_nombre: `Nivel: ${nombre.trim()}`,
+          descripcion: `Se actualizó el nivel de "${nivelAntes.nombre}" (${nivelAntes.puntaje} pts) a "${nombre.trim()}" (${puntaje} pts)`,
+          detalles: { 
+            cambios: { 
+              antes: { nombre: nivelAntes.nombre, puntaje: nivelAntes.puntaje }, 
+              despues: { nombre: nombre.trim(), puntaje: puntaje } 
+            } 
+          },
+          req
+        });
+      }
+    } catch (logError) {
+      console.error("Error registrando log:", logError);
+      // No interrumpimos el flujo si falla el log
     }
 
     return res.json({ ok: true, mensaje: 'Nivel actualizado correctamente' });
@@ -99,6 +185,20 @@ exports.update = async (req, res) => {
 exports.delete = async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Obtener datos del nivel antes de eliminar (para el log)
+    let nivelInfo = null;
+    try {
+      const [nivel] = await db.query(
+        'SELECT nombre, puntaje, concurso_id, criterio_id FROM niveles WHERE id = ?',
+        [id]
+      );
+      if (nivel.length > 0) {
+        nivelInfo = nivel[0];
+      }
+    } catch (logError) {
+      console.error("Error obteniendo datos del nivel:", logError);
+    }
 
     const [usado] = await db.query(
       'SELECT COUNT(*) AS total FROM detalles_evaluacion WHERE nivel_id = ?',
@@ -116,6 +216,37 @@ exports.delete = async (req, res) => {
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ ok: false, mensaje: 'Nivel no encontrado' });
+    }
+
+    // ✅ LOG: Nivel eliminado
+    try {
+      if (nivelInfo) {
+        const tipoNivel = nivelInfo.criterio_id ? 'criterio' : 'concurso';
+        await LogsService.registrarActividad({
+          usuario: req.usuario,
+          tipo: 'nivel',
+          accion: 'eliminar',
+          entidad_id: parseInt(id),
+          entidad_nombre: `Nivel: ${nivelInfo.nombre}`,
+          descripcion: `Se eliminó el nivel "${nivelInfo.nombre}" (${nivelInfo.puntaje} pts) del ${tipoNivel}`,
+          detalles: { id, concursoId: nivelInfo.concurso_id, criterioId: nivelInfo.criterio_id },
+          req
+        });
+      } else {
+        await LogsService.registrarActividad({
+          usuario: req.usuario,
+          tipo: 'nivel',
+          accion: 'eliminar',
+          entidad_id: parseInt(id),
+          entidad_nombre: `Nivel ID: ${id}`,
+          descripcion: `Se eliminó el nivel ID ${id}`,
+          detalles: { id },
+          req
+        });
+      }
+    } catch (logError) {
+      console.error("Error registrando log:", logError);
+      // No interrumpimos el flujo si falla el log
     }
 
     return res.json({ ok: true, mensaje: 'Nivel eliminado correctamente' });

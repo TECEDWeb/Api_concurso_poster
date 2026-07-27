@@ -1,4 +1,5 @@
 const ProyectoService = require('../services/proyectoService');
+const LogsService = require('../services/logsService');
 
 const proyectoController = {
 
@@ -38,7 +39,7 @@ const proyectoController = {
         nivel, 
         area, 
         activo, 
-        codigoProyecto,  // NUEVO
+        codigoProyecto,
         participantes = [], 
         tutores = [] 
       } = req.body;
@@ -47,8 +48,6 @@ const proyectoController = {
         return res.status(400).json({ ok: false, mensaje: 'El nombre del proyecto es obligatorio' });
       }
 
-      // ✅ YA NO validamos que haya al menos un participante
-      // Solo validamos que si hay tutores, no excedan el límite
       const tutoresValidos = Array.isArray(tutores) ? tutores.filter(t => t && t.trim()) : [];
       if (tutoresValidos.length > 4) {
         return res.status(400).json({ ok: false, mensaje: 'Máximo 4 tutores por proyecto' });
@@ -65,6 +64,30 @@ const proyectoController = {
         participantes: participantes || [],
         tutores: tutores || []
       });
+
+      // ✅ LOG: Proyecto creado
+      try {
+        await LogsService.registrarActividad({
+          usuario: req.usuario,
+          tipo: 'proyecto',
+          accion: 'crear',
+          entidad_id: proyecto?.id || null,
+          entidad_nombre: nombre.trim(),
+          descripcion: `Se creó el proyecto "${nombre.trim()}" en el área "${area || 'Sin área'}" con nivel "${nivel || 'Sin nivel'}"`,
+          detalles: { 
+            concursoId, 
+            nivel, 
+            area, 
+            codigoProyecto,
+            totalParticipantes: participantes.length,
+            totalTutores: tutoresValidos.length
+          },
+          req
+        });
+      } catch (logError) {
+        console.error("Error registrando log:", logError);
+        // No interrumpimos el flujo si falla el log
+      }
 
       return res.status(201).json({ ok: true, mensaje: 'Proyecto creado correctamente', data: proyecto });
 
@@ -117,6 +140,44 @@ const proyectoController = {
 
       const proyectoActualizado = await ProyectoService.getById(id);
 
+      // ✅ LOG: Proyecto actualizado
+      try {
+        let cambios = [];
+        if (nombre !== existente.nombre) cambios.push(`nombre: "${existente.nombre}" → "${nombre.trim()}"`);
+        if (area !== existente.area) cambios.push(`área: "${existente.area || 'Sin área'}" → "${area || 'Sin área'}"`);
+        if (nivel !== existente.nivel) cambios.push(`nivel: "${existente.nivel || 'Sin nivel'}" → "${nivel || 'Sin nivel'}"`);
+        if (activo !== existente.activo) cambios.push(`estado: ${existente.activo ? 'Activo' : 'Inactivo'} → ${activo ? 'Activo' : 'Inactivo'}`);
+
+        await LogsService.registrarActividad({
+          usuario: req.usuario,
+          tipo: 'proyecto',
+          accion: 'editar',
+          entidad_id: id,
+          entidad_nombre: nombre.trim(),
+          descripcion: `Se actualizó el proyecto "${nombre.trim()}"${cambios.length > 0 ? ': ' + cambios.join(', ') : ''}`,
+          detalles: { 
+            cambios: { 
+              antes: { 
+                nombre: existente.nombre, 
+                area: existente.area, 
+                nivel: existente.nivel,
+                activo: existente.activo 
+              }, 
+              despues: { 
+                nombre: nombre.trim(), 
+                area: area || null, 
+                nivel: nivel || null,
+                activo: activo !== undefined ? activo : true
+              } 
+            } 
+          },
+          req
+        });
+      } catch (logError) {
+        console.error("Error registrando log:", logError);
+        // No interrumpimos el flujo si falla el log
+      }
+
       return res.json({ ok: true, mensaje: 'Proyecto actualizado correctamente', data: proyectoActualizado });
 
     } catch (error) {
@@ -134,7 +195,27 @@ const proyectoController = {
         return res.status(404).json({ ok: false, mensaje: 'Proyecto no encontrado' });
       }
 
+      // Guardar nombre para el log
+      const nombreProyecto = existente.nombre;
+
       await ProyectoService.delete(id);
+
+      // ✅ LOG: Proyecto eliminado
+      try {
+        await LogsService.registrarActividad({
+          usuario: req.usuario,
+          tipo: 'proyecto',
+          accion: 'eliminar',
+          entidad_id: id,
+          entidad_nombre: nombreProyecto,
+          descripcion: `Se eliminó el proyecto "${nombreProyecto}"`,
+          detalles: { id, area: existente.area, nivel: existente.nivel },
+          req
+        });
+      } catch (logError) {
+        console.error("Error registrando log:", logError);
+        // No interrumpimos el flujo si falla el log
+      }
 
       return res.json({ ok: true, mensaje: 'Proyecto eliminado correctamente' });
 

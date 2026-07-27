@@ -1,4 +1,5 @@
 const concursoModel = require('../model/concursoModel');
+const LogsService = require('../services/logsService');
 
 const concursoController = {
 
@@ -72,6 +73,28 @@ const concursoController = {
 
       const concursoCreado = await concursoModel.buscarPorId(id);
 
+      // ✅ LOG: Concurso creado
+      try {
+        await LogsService.registrarActividad({
+          usuario: req.usuario,
+          tipo: 'concurso',
+          accion: 'crear',
+          entidad_id: id,
+          entidad_nombre: nombre.trim(),
+          descripcion: `Se creó el concurso "${nombre.trim()}"`,
+          detalles: { 
+            tipo: tipo || null, 
+            fecha_inicio: fecha_inicio || null, 
+            fecha_fin: fecha_fin || null,
+            puntaje_maximo: puntaje_maximo || null
+          },
+          req
+        });
+      } catch (logError) {
+        console.error("Error registrando log:", logError);
+        // No interrumpimos el flujo si falla el log
+      }
+
       return res.status(201).json({
         ok: true,
         mensaje: 'Concurso creado correctamente',
@@ -120,6 +143,36 @@ const concursoController = {
 
       const concursoActualizado = await concursoModel.buscarPorId(id);
 
+      // ✅ LOG: Concurso actualizado
+      try {
+        await LogsService.registrarActividad({
+          usuario: req.usuario,
+          tipo: 'concurso',
+          accion: 'editar',
+          entidad_id: id,
+          entidad_nombre: nombre.trim(),
+          descripcion: `Se actualizó el concurso "${nombre.trim()}"`,
+          detalles: { 
+            cambios: { 
+              antes: { 
+                nombre: existe.nombre, 
+                tipo: existe.tipo, 
+                activo: existe.activo 
+              }, 
+              despues: { 
+                nombre: nombre.trim(), 
+                tipo: tipo || null, 
+                activo: activo !== undefined ? activo : true 
+              } 
+            } 
+          },
+          req
+        });
+      } catch (logError) {
+        console.error("Error registrando log:", logError);
+        // No interrumpimos el flujo si falla el log
+      }
+
       return res.json({
         ok: true,
         mensaje: 'Concurso actualizado correctamente',
@@ -147,7 +200,27 @@ const concursoController = {
         });
       }
 
+      // Guardar nombre antes de eliminar
+      const nombreConcurso = existe.nombre;
+
       await concursoModel.eliminar(id);
+
+      // ✅ LOG: Concurso eliminado
+      try {
+        await LogsService.registrarActividad({
+          usuario: req.usuario,
+          tipo: 'concurso',
+          accion: 'eliminar',
+          entidad_id: id,
+          entidad_nombre: nombreConcurso,
+          descripcion: `Se eliminó el concurso "${nombreConcurso}"`,
+          detalles: { id },
+          req
+        });
+      } catch (logError) {
+        console.error("Error registrando log:", logError);
+        // No interrumpimos el flujo si falla el log
+      }
 
       return res.json({
         ok: true,

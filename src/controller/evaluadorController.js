@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const LogsService = require('../services/logsService');
 
 const evaluadorController = {
 
@@ -10,7 +11,6 @@ const evaluadorController = {
       const evaluadorId = req.usuario.id;
       console.log('Dashboard stats para evaluador:', evaluadorId);
 
-      // Obtener proyectos asignados al evaluador
       const [asignaciones] = await db.query(`
         SELECT 
           e.id,
@@ -54,7 +54,6 @@ const evaluadorController = {
       const evaluadorId = req.usuario.id;
       console.log('Actividades recientes para evaluador:', evaluadorId);
 
-      // Obtener evaluaciones recientes
       const [evaluaciones] = await db.query(`
         SELECT 
           e.id,
@@ -69,7 +68,6 @@ const evaluadorController = {
         LIMIT 5
       `, [evaluadorId]);
 
-      // Obtener asignaciones recientes
       const [asignaciones] = await db.query(`
         SELECT 
           e.id,
@@ -84,7 +82,6 @@ const evaluadorController = {
         LIMIT 5
       `, [evaluadorId]);
 
-      // Combinar y ordenar
       const actividades = [...evaluaciones, ...asignaciones];
       actividades.sort((a, b) => {
         const fechaA = a.fecha ? new Date(a.fecha) : new Date(0);
@@ -92,7 +89,6 @@ const evaluadorController = {
         return fechaB - fechaA;
       });
 
-      // Formatear para el frontend
       const resultado = actividades.slice(0, 5).map(act => {
         let texto = '';
         let icon = '';
@@ -165,7 +161,6 @@ const evaluadorController = {
         ORDER BY e.fecha_asignacion DESC
       `, [evaluadorId]);
 
-      // Procesar participantes
       const proyectosFormateados = proyectos.map(p => ({
         evaluacionId: p.evaluacionId,
         yaEvaluado: p.yaEvaluado === 'evaluado',
@@ -247,6 +242,22 @@ const evaluadorController = {
 
       console.log('Guardando evaluación:', { evaluacionId, detalles, observacion });
 
+      // Obtener datos para el log
+      let evaluacionInfo = null;
+      try {
+        const [evaluacion] = await db.query(`
+          SELECT e.*, p.nombre as proyecto_nombre 
+          FROM evaluaciones e
+          JOIN proyectos p ON e.proyecto_id = p.id
+          WHERE e.id = ?
+        `, [evaluacionId]);
+        if (evaluacion.length > 0) {
+          evaluacionInfo = evaluacion[0];
+        }
+      } catch (logError) {
+        console.error("Error obteniendo datos para log:", logError);
+      }
+
       // Actualizar evaluación
       await db.query(`
         UPDATE evaluaciones 
@@ -262,6 +273,25 @@ const evaluadorController = {
           INSERT INTO detalles_evaluacion (evaluacion_id, criterio_id, nivel_id)
           VALUES (?, ?, ?)
         `, [evaluacionId, detalle.criterio_id, detalle.nivel_id]);
+      }
+
+      // ✅ LOG: Evaluación guardada (desde evaluador)
+      try {
+        if (evaluacionInfo) {
+          await LogsService.registrarActividad({
+            usuario: req.usuario,
+            tipo: 'evaluacion',
+            accion: 'guardar',
+            entidad_id: parseInt(evaluacionId),
+            entidad_nombre: `Evaluación: ${evaluacionInfo.proyecto_nombre}`,
+            descripcion: `El evaluador guardó la evaluación del proyecto "${evaluacionInfo.proyecto_nombre}"`,
+            detalles: { evaluacionId, totalDetalles: detalles?.length || 0 },
+            req
+          });
+        }
+      } catch (logError) {
+        console.error("Error registrando log:", logError);
+        // No interrumpimos el flujo si falla el log
       }
 
       return res.json({

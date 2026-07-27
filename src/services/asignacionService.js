@@ -1,17 +1,6 @@
 const db = require('../config/db');
 
 const AsignacionService = {
-
-  /**
-   * Devuelve las asignaciones uniendo con `evaluaciones` para traer:
-   * - Los nombres correctos con el sufijo _nombre (que el frontend espera)
-   * - El evaluacion_id real (necesario para poder editar/reabrir/eliminar
-   *   la evaluación, ya que asignaciones.id y evaluaciones.id son
-   *   secuencias independientes y NO son intercambiables)
-   * - El estado REAL (el de evaluaciones, que sí se actualiza cuando el
-   *   evaluador termina), en vez del estado de asignaciones que se queda
-   *   fijo en 'asignado' para siempre
-   */
   async getAsignaciones() {
     const [rows] = await db.query(`
       SELECT
@@ -164,12 +153,6 @@ const AsignacionService = {
     };
   },
 
-  /**
-   * Elimina una asignación por su ID directo de la tabla `asignaciones`.
-   * Se mantiene por compatibilidad, pero el flujo normal de "Quitar
-   * asignación" desde el frontend usa evaluacionService.eliminarEvaluacion,
-   * que ahora también limpia esta tabla automáticamente (ver ese archivo).
-   */
   async eliminar(id) {
     await db.query(`DELETE FROM asignaciones WHERE id = ?`, [id]);
     return true;
