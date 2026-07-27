@@ -25,25 +25,15 @@ const app = express();
 // ============================================
 // ✅ CORS - CONFIGURACIÓN CORREGIDA
 // ============================================
+
+// Configuración CORS
 const corsOptions = {
-  origin: function (origin, callback) {
-    // Permitir solicitudes sin origen (como Postman)
-    if (!origin) return callback(null, true);
-    
-    const allowedOrigins = [
-      'http://localhost:8100',
-      'http://localhost',
-      'https://evaluacion.teced.org',
-      'https://apievaluacion.teced.org'
-    ];
-    
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      console.log('Origen bloqueado por CORS:', origin);
-      callback(null, false);
-    }
-  },
+  origin: [
+    'http://localhost:8100',
+    'http://localhost',
+    'https://evaluacion.teced.org',
+    'https://apievaluacion.teced.org'
+  ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
   credentials: true,
@@ -51,11 +41,17 @@ const corsOptions = {
   optionsSuccessStatus: 204
 };
 
-// Aplicar CORS a todas las rutas
+// Aplicar CORS a TODAS las rutas
 app.use(cors(corsOptions));
 
-// Manejar explícitamente OPTIONS para todas las rutas
+// Manejar explícitamente OPTIONS para TODAS las rutas
 app.options('*', cors(corsOptions));
+
+// Log de solicitudes (para debugging)
+app.use((req, res, next) => {
+  console.log(`[${req.method}] ${req.url} - Origin: ${req.headers.origin || 'sin origen'}`);
+  next();
+});
 
 app.use(express.json());
 
