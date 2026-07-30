@@ -11,6 +11,17 @@ const concursoModel = {
     return rows;
   },
 
+  async listarPorCoordinador(coordinadorId) {
+    const [rows] = await pool.query(
+      `SELECT *
+       FROM concursos
+       WHERE coordinador_id = ?
+       ORDER BY created_at DESC`,
+      [coordinadorId]
+    );
+    return rows;
+  },
+
   // Alias para compatibilidad
   async obtenerTodos() {
     return this.listar();
@@ -34,10 +45,6 @@ const concursoModel = {
 
   /**
    * Crea el concurso y, en la misma transacción, su rúbrica vacía
-   * asociada (secciones y niveles se agregan después desde el
-   * constructor de rúbricas). Esto garantiza que TODO concurso nuevo
-   * ya nace con una rúbrica lista para configurar, sin que nadie
-   * tenga que acordarse de crearla por separado.
    */
   async crear(data) {
     const {
@@ -47,7 +54,8 @@ const concursoModel = {
       fecha_inicio,
       fecha_fin,
       puntaje_maximo,
-      activo
+      activo,
+      coordinador_id 
     } = data;
 
     const connection = await pool.getConnection();
@@ -57,24 +65,23 @@ const concursoModel = {
 
       const [result] = await connection.query(
         `INSERT INTO concursos
-        (nombre, descripcion, tipo, fecha_inicio, fecha_fin, puntaje_maximo, activo)
-        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        (nombre, descripcion, tipo, fecha_inicio, fecha_fin, puntaje_maximo, activo, coordinador_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, 
         [
           nombre,
           descripcion || null,
           tipo || null,
           fecha_inicio || null,
           fecha_fin || null,
-          puntaje_maximo || null,
-          activo ?? true
+          (puntaje_maximo !== undefined && puntaje_maximo !== null && puntaje_maximo !== '') ? puntaje_maximo : null,
+          activo ?? true,
+          coordinador_id || null 
         ]
       );
 
       const concursoId = result.insertId;
 
-      // Crear automáticamente la rúbrica vacía de este concurso.
-      // Sin secciones ni niveles todavía: eso se configura después
-      // desde el constructor de rúbricas en el admin.
+      // Crear automáticamente la rúbrica vacía
       await connection.query(
         `INSERT INTO rubricas (concurso_id, nombre, descripcion, puntaje_maximo, estado)
          VALUES (?, ?, ?, ?, ?)`,
@@ -82,7 +89,7 @@ const concursoModel = {
           concursoId,
           `Rúbrica: ${nombre}`,
           null,
-          puntaje_maximo || 100,
+          (puntaje_maximo !== undefined && puntaje_maximo !== null && puntaje_maximo !== '') ? puntaje_maximo : 100,
           'ACTIVA'
         ]
       );
@@ -108,37 +115,37 @@ const concursoModel = {
       fecha_inicio,
       fecha_fin,
       puntaje_maximo,
-      activo
+      activo,
+      coordinador_id 
     } = data;
 
     await pool.query(
       `UPDATE concursos
-      SET nombre=?,
-          descripcion=?,
-          tipo=?,
-          fecha_inicio=?,
-          fecha_fin=?,
-          puntaje_maximo=?,
-          activo=?
-      WHERE id=?`,
+       SET nombre=?,
+           descripcion=?,
+           tipo=?,
+           fecha_inicio=?,
+           fecha_fin=?,
+           puntaje_maximo=?,
+           activo=?,
+           coordinador_id=?  /* AGREGADO: Actualizamos coordinador */
+       WHERE id=?`,
       [
         nombre,
         descripcion || null,
         tipo || null,
         fecha_inicio || null,
         fecha_fin || null,
-        // Aquí también corregimos:
-        (puntaje_maximo !== undefined && puntaje_maximo !== null) ? puntaje_maximo : null,
+        (puntaje_maximo !== undefined && puntaje_maximo !== null && puntaje_maximo !== '') ? puntaje_maximo : null,
         activo,
+        coordinador_id || null, 
         id
       ]
     );
   },
 
   /**
-   * Elimina el concurso y su rúbrica asociada (con sus secciones/niveles),
-   * en cascada dentro de una transacción. Esto evita dejar una rúbrica
-   * huérfana apuntando a un concurso que ya no existe.
+   * Elimina el concurso y su rúbrica asociada
    */
   async eliminar(id) {
     const connection = await pool.getConnection();
