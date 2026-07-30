@@ -93,7 +93,7 @@ const concursoModel = {
 
     } catch (error) {
       await connection.rollback();
-      console.error('❌ ERROR crear concurso (transacción):', error);
+      console.error('ERROR crear concurso (transacción):', error);
       throw error;
     } finally {
       connection.release();
@@ -113,21 +113,22 @@ const concursoModel = {
 
     await pool.query(
       `UPDATE concursos
-       SET nombre=?,
-           descripcion=?,
-           tipo=?,
-           fecha_inicio=?,
-           fecha_fin=?,
-           puntaje_maximo=?,
-           activo=?
-       WHERE id=?`,
+      SET nombre=?,
+          descripcion=?,
+          tipo=?,
+          fecha_inicio=?,
+          fecha_fin=?,
+          puntaje_maximo=?,
+          activo=?
+      WHERE id=?`,
       [
         nombre,
         descripcion || null,
         tipo || null,
         fecha_inicio || null,
         fecha_fin || null,
-        puntaje_maximo || null,
+        // Aquí también corregimos:
+        (puntaje_maximo !== undefined && puntaje_maximo !== null) ? puntaje_maximo : null,
         activo,
         id
       ]
@@ -162,7 +163,7 @@ const concursoModel = {
 
     } catch (error) {
       await connection.rollback();
-      console.error('❌ ERROR eliminar concurso (transacción):', error);
+      console.error('ERROR eliminar concurso (transacción):', error);
       throw error;
     } finally {
       connection.release();

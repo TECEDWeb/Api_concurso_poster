@@ -2,9 +2,6 @@ const express = require('express');
 const router = express.Router();
 const LogsService = require('../services/logsService');
 
-// ⚠️ TEMPORALMENTE SIN MIDDLEWARES PARA PROBAR
-// Después de que funcione, agregas los middlewares
-
 /**
  * GET /api/logs/recientes
  * Obtener logs recientes (últimos 10 por defecto)
