@@ -19,12 +19,10 @@ const seccionesRoutes = require('./routes/seccionRoutes');
 const criterioRoutes = require('./routes/criterioRoutes');
 const nivelRoutes = require('./routes/nivelRoutes');
 const logsRoutes = require('./routes/logsRoutes');
+const coordinadorAsignacionRoutes = require('./routes/coordinadorAsignacionRoutes');
+
 
 const app = express();
-
-// ============================================
-// ✅ CORS - CONFIGURACIÓN CORREGIDA
-// ============================================
 
 // Configuración CORS
 const corsOptions = {
@@ -73,6 +71,7 @@ app.use('/api/secciones', seccionesRoutes);
 app.use('/api/criterios', criterioRoutes);
 app.use('/api/niveles', nivelRoutes);
 app.use('/api/logs', logsRoutes);
+app.use('/api/coordinador-asignaciones', coordinadorAsignacionRoutes);
 
 // ============================================
 // HEALTH CHECK
