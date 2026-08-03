@@ -6,6 +6,7 @@ const roleMiddleware = require('../middleware/roleMiddleware');
 
 router.get('/validar/:codigo', controller.validarPublico);
 router.get('/mios', authMiddleware, controller.misCertificados);
+router.get('/concurso/:concursoId', authMiddleware, roleMiddleware(['admin', 'coordinador']), controller.porConcurso);
 router.get('/', authMiddleware, roleMiddleware('admin'), controller.getAll);
 router.post('/generar', authMiddleware, roleMiddleware('admin'), controller.generar);
 router.get('/:id/pdf', authMiddleware, controller.descargarPdf);

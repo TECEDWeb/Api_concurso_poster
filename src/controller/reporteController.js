@@ -982,3 +982,283 @@ exports.exportarPDFProyecto = async (req, res) => {
     return res.status(500).json({ ok: false, mensaje: 'Error generando PDF del proyecto: ' + error.message });
   }
 };
+
+// =====================================
+// HELPER: verifica que el coordinador solo vea su propio concurso
+// =====================================
+async function validarAccesoConcurso(usuario, concursoId) {
+  if (usuario.rol === 'admin') return true;
+
+  if (usuario.rol === 'coordinador') {
+    const [rows] = await db.query(
+      `SELECT id FROM concursos WHERE id = ? AND coordinador_id = ?`,
+      [concursoId, usuario.id]
+    );
+    return rows.length > 0;
+  }
+
+  return false;
+}
+
+// =====================================
+// STATS POR CONCURSO
+// =====================================
+exports.statsByConcurso = async (req, res) => {
+  try {
+    const concursoId = parseInt(req.params.concursoId);
+
+    const tieneAcceso = await validarAccesoConcurso(req.usuario, concursoId);
+    if (!tieneAcceso) {
+      return res.status(403).json({ ok: false, mensaje: 'No tienes permisos para ver este concurso' });
+    }
+
+    const [[proyectos]] = await db.query(
+      `SELECT COUNT(*) AS total FROM proyectos WHERE concurso_id = ?`,
+      [concursoId]
+    );
+
+    const [[evaluaciones]] = await db.query(`
+      SELECT COUNT(*) AS total
+      FROM evaluaciones e
+      JOIN proyectos p ON p.id = e.proyecto_id
+      WHERE p.concurso_id = ?
+    `, [concursoId]);
+
+    const [[completadas]] = await db.query(`
+      SELECT COUNT(*) AS total
+      FROM evaluaciones e
+      JOIN proyectos p ON p.id = e.proyecto_id
+      WHERE p.concurso_id = ? AND e.estado = 'evaluado'
+    `, [concursoId]);
+
+    let promedio = 0;
+    try {
+      const [promedioResult] = await db.query(`
+        SELECT AVG(total_puntaje) AS promedio FROM (
+          SELECT SUM(n.puntaje) AS total_puntaje
+          FROM evaluaciones e
+          JOIN proyectos p ON p.id = e.proyecto_id
+          JOIN detalles_evaluacion d ON e.id = d.evaluacion_id
+          JOIN niveles n ON d.nivel_id = n.id
+          WHERE p.concurso_id = ?
+          GROUP BY e.id
+        ) AS puntajes
+      `, [concursoId]);
+      promedio = num(promedioResult[0].promedio);
+    } catch (e) {
+      promedio = 0;
+    }
+
+    return res.json({
+      ok: true,
+      data: {
+        proyectos: num(proyectos.total),
+        evaluaciones: num(evaluaciones.total),
+        completadas: num(completadas.total),
+        promedio: Math.round(promedio * 10) / 10
+      }
+    });
+
+  } catch (error) {
+    console.error('ERROR STATS CONCURSO:', error);
+    return res.status(500).json({ ok: false, mensaje: 'Error obteniendo estadísticas del concurso' });
+  }
+};
+
+// =====================================
+// EXPORTAR PDF POR CONCURSO
+// =====================================
+exports.exportarPDFConcurso = async (req, res) => {
+  try {
+    const concursoId = parseInt(req.params.concursoId);
+
+    const tieneAcceso = await validarAccesoConcurso(req.usuario, concursoId);
+    if (!tieneAcceso) {
+      return res.status(403).json({ ok: false, mensaje: 'No tienes permisos para ver este concurso' });
+    }
+
+    const [[concursoInfo]] = await db.query(
+      `SELECT nombre FROM concursos WHERE id = ?`,
+      [concursoId]
+    );
+
+    if (!concursoInfo) {
+      return res.status(404).json({ ok: false, mensaje: 'Concurso no encontrado' });
+    }
+
+    const [rawRows] = await db.query(`
+      SELECT
+        p.nombre AS proyecto,
+        u.nombre AS evaluador,
+        u.rol,
+        ROUND(SUM(n.puntaje), 2) AS puntaje,
+        ROUND(AVG(n.puntaje), 2) AS promedio
+      FROM proyectos p
+      LEFT JOIN evaluaciones e ON e.proyecto_id = p.id
+      LEFT JOIN detalles_evaluacion d ON d.evaluacion_id = e.id
+      LEFT JOIN niveles n ON n.id = d.nivel_id
+      LEFT JOIN usuarios u ON u.id = e.evaluador_id
+      WHERE p.concurso_id = ?
+      GROUP BY p.nombre, u.nombre, u.rol
+      ORDER BY p.nombre ASC
+    `, [concursoId]);
+
+    const rows = rawRows.map(r => ({
+      proyecto: r.proyecto,
+      evaluador: r.evaluador,
+      rol: r.rol,
+      puntaje: num(r.puntaje),
+      promedio: num(r.promedio)
+    }));
+
+    const totalProyectos = new Set(rows.map(r => r.proyecto)).size;
+    const totalEvaluadores = new Set(rows.map(r => r.evaluador).filter(Boolean)).size;
+    const promedioGeneral = rows.length
+      ? rows.reduce((sum, r) => sum + r.promedio, 0) / rows.length
+      : 0;
+
+    const pdfBuffer = generarPdfBuffer({
+      titulo: 'REPORTE DEL CONCURSO',
+      subtitulo: concursoInfo.nombre,
+      estadisticas: [
+        `Total de proyectos: ${totalProyectos}`,
+        `Total de evaluadores: ${totalEvaluadores}`,
+        `Promedio general: ${promedioGeneral.toFixed(2)} pts`
+      ],
+      tablaHeaders: ['Proyecto', 'Evaluador', 'Rol', 'Puntaje', 'Promedio'],
+      tablaFilas: rows.map(r => [
+        r.proyecto || 'N/A',
+        r.evaluador || 'Sin evaluar',
+        r.rol || 'N/A',
+        r.puntaje.toFixed(2),
+        r.promedio.toFixed(2)
+      ])
+    });
+
+    try {
+      await LogsService.registrarActividad({
+        usuario: req.usuario,
+        tipo: 'reporte',
+        accion: 'exportar',
+        entidad_id: concursoId,
+        entidad_nombre: `Exportación PDF: ${concursoInfo.nombre}`,
+        descripcion: `Exportó reporte en PDF del concurso "${concursoInfo.nombre}"`,
+        detalles: { concursoId, totalRegistros: rows.length, tipo: 'pdf' },
+        req
+      });
+    } catch (logError) {
+      console.error("Error registrando log:", logError);
+    }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=reporte-${nombreSeguro(concursoInfo.nombre)}.pdf`);
+    res.send(pdfBuffer);
+
+  } catch (error) {
+    console.error('ERROR EXPORTAR PDF CONCURSO:', error);
+    return res.status(500).json({ ok: false, mensaje: 'Error generando PDF del concurso: ' + error.message });
+  }
+};
+
+// =====================================
+// EXPORTAR EXCEL POR CONCURSO
+// =====================================
+exports.exportarExcelConcurso = async (req, res) => {
+  try {
+    const concursoId = parseInt(req.params.concursoId);
+
+    const tieneAcceso = await validarAccesoConcurso(req.usuario, concursoId);
+    if (!tieneAcceso) {
+      return res.status(403).json({ ok: false, mensaje: 'No tienes permisos para ver este concurso' });
+    }
+
+    const [[concursoInfo]] = await db.query(
+      `SELECT nombre FROM concursos WHERE id = ?`,
+      [concursoId]
+    );
+
+    if (!concursoInfo) {
+      return res.status(404).json({ ok: false, mensaje: 'Concurso no encontrado' });
+    }
+
+    const [rows] = await db.query(`
+      SELECT
+        p.nombre AS proyecto,
+        u.nombre AS evaluador,
+        u.rol,
+        ROUND(SUM(n.puntaje), 2) AS puntaje,
+        ROUND(AVG(n.puntaje), 2) AS promedio
+      FROM proyectos p
+      LEFT JOIN evaluaciones e ON e.proyecto_id = p.id
+      LEFT JOIN detalles_evaluacion d ON d.evaluacion_id = e.id
+      LEFT JOIN niveles n ON n.id = d.nivel_id
+      LEFT JOIN usuarios u ON u.id = e.evaluador_id
+      WHERE p.concurso_id = ?
+      GROUP BY p.nombre, u.nombre, u.rol
+      ORDER BY p.nombre ASC
+    `, [concursoId]);
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet(`Reporte ${concursoInfo.nombre}`.substring(0, 31));
+
+    sheet.mergeCells('A1:E1');
+    const titleCell = sheet.getCell('A1');
+    titleCell.value = `REPORTE DEL CONCURSO - ${concursoInfo.nombre.toUpperCase()}`;
+    titleCell.font = { size: 16, bold: true, color: { argb: 'FF003366' } };
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    sheet.getRow(1).height = 40;
+
+    const headerRow = sheet.getRow(3);
+    headerRow.values = ['Proyecto', 'Evaluador', 'Rol', 'Puntaje', 'Promedio'];
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF003366' } };
+    headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+    headerRow.height = 30;
+
+    sheet.getColumn(1).width = 35;
+    sheet.getColumn(2).width = 30;
+    sheet.getColumn(3).width = 20;
+    sheet.getColumn(4).width = 15;
+    sheet.getColumn(5).width = 15;
+
+    let rowIndex = 4;
+    rows.forEach(row => {
+      const rowData = sheet.getRow(rowIndex);
+      rowData.values = [
+        row.proyecto,
+        row.evaluador || 'Sin evaluar',
+        row.rol || '',
+        num(row.puntaje),
+        num(row.promedio)
+      ];
+      rowData.alignment = { vertical: 'middle' };
+      rowData.height = 25;
+      rowIndex++;
+    });
+
+    try {
+      await LogsService.registrarActividad({
+        usuario: req.usuario,
+        tipo: 'reporte',
+        accion: 'exportar',
+        entidad_id: concursoId,
+        entidad_nombre: `Exportación Excel: ${concursoInfo.nombre}`,
+        descripcion: `Exportó reporte en Excel del concurso "${concursoInfo.nombre}"`,
+        detalles: { concursoId, totalRegistros: rows.length, tipo: 'excel' },
+        req
+      });
+    } catch (logError) {
+      console.error("Error registrando log:", logError);
+    }
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=reporte-${nombreSeguro(concursoInfo.nombre)}.xlsx`);
+
+    await workbook.xlsx.write(res);
+    res.end();
+
+  } catch (error) {
+    console.error('ERROR EXPORTAR EXCEL CONCURSO:', error);
+    return res.status(500).json({ ok: false, mensaje: 'Error generando Excel del concurso' });
+  }
+};

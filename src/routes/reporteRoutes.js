@@ -14,4 +14,8 @@ router.get('/exportar/proyecto/:proyectoId', authMiddleware, roleMiddleware('adm
 router.get('/exportar-pdf', authMiddleware, roleMiddleware('admin'), reporteController.exportarPDF);
 router.get('/exportar-pdf/proyecto/:proyectoId', authMiddleware, roleMiddleware('admin'), reporteController.exportarPDFProyecto);
 
+router.get('/stats/concurso/:concursoId', authMiddleware, roleMiddleware(['admin', 'coordinador']), reporteController.statsByConcurso);
+router.get('/exportar-pdf/concurso/:concursoId', authMiddleware, roleMiddleware(['admin', 'coordinador']), reporteController.exportarPDFConcurso);
+router.get('/exportar-excel/concurso/:concursoId', authMiddleware, roleMiddleware(['admin', 'coordinador']), reporteController.exportarExcelConcurso);
+
 module.exports = router;

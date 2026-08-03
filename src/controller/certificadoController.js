@@ -500,7 +500,35 @@ const certificadosController = {
       console.error('ERROR eliminar certificado:', error.message);
       return res.status(500).json({ ok: false, mensaje: 'Error al eliminar el certificado' });
     }
-  }
+  },
+  /**
+   * GET /api/certificados/concurso/:concursoId (admin y coordinador)
+   */
+  async porConcurso(req, res) {
+    try {
+      const concursoId = parseInt(req.params.concursoId);
+
+      if (req.usuario.rol === 'coordinador') {
+        const [concurso] = await db.query(
+          `SELECT id FROM concursos WHERE id = ? AND coordinador_id = ?`,
+          [concursoId, req.usuario.id]
+        );
+        if (concurso.length === 0) {
+          return res.status(403).json({ ok: false, mensaje: 'No tienes permisos para ver este concurso' });
+        }
+      }
+
+      const [rows] = await db.query(
+        'SELECT * FROM certificados WHERE concurso_id = ? ORDER BY id DESC',
+        [concursoId]
+      );
+
+      return res.json({ ok: true, data: rows.map(mapearFilaCertificado) });
+    } catch (error) {
+      console.error('ERROR porConcurso certificados:', error.message);
+      return res.status(500).json({ ok: false, mensaje: 'Error al obtener certificados del concurso' });
+    }
+  },
 
 };
 
