@@ -148,7 +148,16 @@ const usuarioModel = {
       [id]
     );
     return result.affectedRows > 0;
-  }
+  },
+  async getCoordinadores() {
+    const [rows] = await db.query(
+      `SELECT id, cedula, nombre, email, telefono, rol, departamento, activo 
+       FROM usuarios 
+       WHERE rol = 'coordinador' AND activo = 1
+       ORDER BY nombre ASC`
+    );
+    return rows;
+  },
 };
 
 module.exports = usuarioModel;

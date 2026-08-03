@@ -40,6 +40,23 @@ const usuarioController = {
       });
     }
   },
+  async getCoordinadores(req, res) {
+    try {
+      console.log('GET COORDINADORES');
+      const coordinadores = await usuarioModel.getCoordinadores();
+
+      return res.json({
+        ok: true,
+        data: coordinadores
+      });
+    } catch (err) {
+      console.error('ERROR getCoordinadores:', err.message);
+      return res.status(500).json({
+        ok: false,
+        mensaje: 'Error al obtener coordinadores'
+      });
+    }
+  },
 
   async create(req, res) {
     try {

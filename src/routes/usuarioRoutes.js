@@ -26,7 +26,7 @@ router.put('/:id/estado', authMiddleware, roleMiddleware('admin'), usuarioContro
 router.patch('/:id/estado', authMiddleware, roleMiddleware('admin'), usuarioController.toggleActivo);
 router.post('/:id/reset-password', authMiddleware, roleMiddleware('admin'), usuarioController.resetPassword);
 router.delete('/:id', authMiddleware, roleMiddleware('admin'), usuarioController.eliminar);
-
+router.get('/coordinadores', authMiddleware, roleMiddleware(['admin']), usuarioController.getCoordinadores);
 router.get('/ejemplo-multi-rol', authMiddleware, roleMiddleware('admin', 'evaluador'), (req, res) => {
   console.log('GET /api/usuarios/ejemplo-multi-rol');
   res.json({

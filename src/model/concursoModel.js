@@ -4,19 +4,21 @@ const concursoModel = {
 
   async listar() {
     const [rows] = await pool.query(`
-      SELECT *
-      FROM concursos
-      ORDER BY created_at DESC
+      SELECT c.*, u.nombre AS coordinador_nombre
+      FROM concursos c
+      LEFT JOIN usuarios u ON u.id = c.coordinador_id
+      ORDER BY c.created_at DESC
     `);
     return rows;
   },
 
   async listarPorCoordinador(coordinadorId) {
     const [rows] = await pool.query(
-      `SELECT *
-       FROM concursos
-       WHERE coordinador_id = ?
-       ORDER BY created_at DESC`,
+      `SELECT c.*, u.nombre AS coordinador_nombre
+       FROM concursos c
+       LEFT JOIN usuarios u ON u.id = c.coordinador_id
+       WHERE c.coordinador_id = ?
+       ORDER BY c.created_at DESC`,
       [coordinadorId]
     );
     return rows;
@@ -29,9 +31,10 @@ const concursoModel = {
 
   async buscarPorId(id) {
     const [rows] = await pool.query(
-      `SELECT *
-       FROM concursos
-       WHERE id = ?
+      `SELECT c.*, u.nombre AS coordinador_nombre
+       FROM concursos c
+       LEFT JOIN usuarios u ON u.id = c.coordinador_id
+       WHERE c.id = ?
        LIMIT 1`,
       [id]
     );
@@ -55,7 +58,7 @@ const concursoModel = {
       fecha_fin,
       puntaje_maximo,
       activo,
-      coordinador_id 
+      coordinador_id
     } = data;
 
     const connection = await pool.getConnection();
@@ -66,7 +69,7 @@ const concursoModel = {
       const [result] = await connection.query(
         `INSERT INTO concursos
         (nombre, descripcion, tipo, fecha_inicio, fecha_fin, puntaje_maximo, activo, coordinador_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           nombre,
           descripcion || null,
@@ -75,13 +78,12 @@ const concursoModel = {
           fecha_fin || null,
           (puntaje_maximo !== undefined && puntaje_maximo !== null && puntaje_maximo !== '') ? puntaje_maximo : null,
           activo ?? true,
-          coordinador_id || null 
+          coordinador_id || null
         ]
       );
 
       const concursoId = result.insertId;
 
-      // Crear automáticamente la rúbrica vacía
       await connection.query(
         `INSERT INTO rubricas (concurso_id, nombre, descripcion, puntaje_maximo, estado)
          VALUES (?, ?, ?, ?, ?)`,
@@ -116,7 +118,7 @@ const concursoModel = {
       fecha_fin,
       puntaje_maximo,
       activo,
-      coordinador_id 
+      coordinador_id
     } = data;
 
     await pool.query(
@@ -128,7 +130,7 @@ const concursoModel = {
            fecha_fin=?,
            puntaje_maximo=?,
            activo=?,
-           coordinador_id=?  /* AGREGADO: Actualizamos coordinador */
+           coordinador_id=?
        WHERE id=?`,
       [
         nombre,
@@ -138,7 +140,7 @@ const concursoModel = {
         fecha_fin || null,
         (puntaje_maximo !== undefined && puntaje_maximo !== null && puntaje_maximo !== '') ? puntaje_maximo : null,
         activo,
-        coordinador_id || null, 
+        coordinador_id || null,
         id
       ]
     );

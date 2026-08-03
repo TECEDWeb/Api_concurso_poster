@@ -19,7 +19,6 @@ const seccionesRoutes = require('./routes/seccionRoutes');
 const criterioRoutes = require('./routes/criterioRoutes');
 const nivelRoutes = require('./routes/nivelRoutes');
 const logsRoutes = require('./routes/logsRoutes');
-const coordinadorAsignacionRoutes = require('./routes/coordinadorAsignacionRoutes');
 
 
 const app = express();
@@ -53,9 +52,6 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-// ============================================
-// RUTAS DE LA API
-// ============================================
 app.use('/api/auth', authRoutes);
 app.use('/api/usuarios', usuarioRoutes);
 app.use('/api/proyectos', proyectoRoutes);
@@ -71,11 +67,8 @@ app.use('/api/secciones', seccionesRoutes);
 app.use('/api/criterios', criterioRoutes);
 app.use('/api/niveles', nivelRoutes);
 app.use('/api/logs', logsRoutes);
-app.use('/api/coordinador-asignaciones', coordinadorAsignacionRoutes);
 
-// ============================================
-// HEALTH CHECK
-// ============================================
+
 app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
@@ -83,9 +76,6 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// ============================================
-// INFORMACIÓN DE LA API
-// ============================================
 app.get('/api', (req, res) => {
   res.json({
     ok: true,
@@ -108,9 +98,6 @@ app.get('/api', (req, res) => {
   });
 });
 
-// ============================================
-// INICIAR SERVIDOR
-// ============================================
 const PORT = process.env.PORT || 3000;
 
 try {
