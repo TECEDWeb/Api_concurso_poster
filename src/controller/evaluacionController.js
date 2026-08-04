@@ -676,7 +676,7 @@ const evaluacionController = {
 
       const result = await EvaluacionService.eliminarEvaluacion(evaluacionId);
 
-      // ✅ LOG: Evaluación eliminada
+      // LOG: Evaluación eliminada
       try {
         if (evaluacionInfo) {
           await LogsService.registrarActividad({
@@ -714,7 +714,469 @@ const evaluacionController = {
         mensaje: err.message || "Error al eliminar la evaluación"
       });
     }
+  },
+  // controller/evaluacionController.js
+
+// ... (código existente)
+
+// ============ NUEVOS MÉTODOS PARA EDICIÓN DE RESPUESTAS ============
+
+/**
+ * Obtener evaluación con todos los detalles para edición (Admin)
+ * GET /api/evaluaciones/:id/editar
+ */
+  async getEvaluacionParaEditar(req, res) {
+    try {
+      const evaluacionId = parseInt(req.params.id);
+
+      if (isNaN(evaluacionId)) {
+        return res.status(400).json({ 
+          ok: false, 
+          mensaje: 'ID de evaluación inválido' 
+        });
+      }
+
+      // Obtener evaluación
+      const [evaluacion] = await db.query(`
+        SELECT 
+          e.id,
+          e.proyecto_id,
+          e.evaluador_id,
+          e.rubrica_id,
+          e.estado,
+          e.observaciones,
+          e.fecha_evaluacion,
+          e.created_at,
+          e.updated_at,
+          u.nombre as evaluador_nombre,
+          u.email as evaluador_email,
+          u.rol as evaluador_rol,
+          p.nombre as proyecto_nombre,
+          p.area as proyecto_area,
+          p.nivel as proyecto_nivel,
+          r.nombre as rubrica_nombre,
+          r.descripcion as rubrica_descripcion,
+          c.nombre as concurso_nombre,
+          c.id as concurso_id
+        FROM evaluaciones e
+        JOIN usuarios u ON u.id = e.evaluador_id
+        JOIN proyectos p ON p.id = e.proyecto_id
+        JOIN rubricas r ON r.id = e.rubrica_id
+        LEFT JOIN concursos c ON c.id = p.concurso_id
+        WHERE e.id = ?
+      `, [evaluacionId]);
+
+      if (evaluacion.length === 0) {
+        return res.status(404).json({ 
+          ok: false, 
+          mensaje: 'Evaluación no encontrada' 
+        });
+      }
+
+      // Obtener detalles de la evaluación
+      const [detalles] = await db.query(`
+        SELECT 
+          id,
+          evaluacion_id,
+          criterio_id,
+          nivel_id,
+          puntaje,
+          seccion,
+          criterio,
+          nivel,
+          puntaje_maximo,
+          created_at,
+          updated_at
+        FROM detalles_evaluacion 
+        WHERE evaluacion_id = ?
+        ORDER BY seccion, id
+      `, [evaluacionId]);
+
+      // Obtener criterios disponibles de la rúbrica
+      const [criterios] = await db.query(`
+        SELECT 
+          c.id,
+          c.nombre,
+          c.descripcion,
+          c.seccion,
+          c.puntaje_maximo,
+          c.orden
+        FROM criterios c
+        WHERE c.rubrica_id = ?
+        ORDER BY c.seccion, c.orden
+      `, [evaluacion[0].rubrica_id]);
+
+      return res.json({
+        ok: true,
+        data: {
+          evaluacion: evaluacion[0],
+          detalles: detalles,
+          criterios: criterios
+        }
+      });
+
+    } catch (error) {
+      console.error('ERROR GET EVALUACION PARA EDITAR:', error);
+      return res.status(500).json({ 
+        ok: false, 
+        mensaje: 'Error al obtener evaluación: ' + error.message 
+      });
+    }
+  },
+
+  /**
+   * ACTUALIZAR EVALUACIÓN (Admin)
+   * PUT /api/evaluaciones/:id/actualizar
+   */
+  async actualizarEvaluacion(req, res) {
+    let connection;
+    try {
+      const evaluacionId = parseInt(req.params.id);
+      const { 
+        observaciones, 
+        detalles,
+        estado,
+        fecha_evaluacion 
+      } = req.body;
+
+      if (isNaN(evaluacionId)) {
+        return res.status(400).json({ 
+          ok: false, 
+          mensaje: 'ID de evaluación inválido' 
+        });
+      }
+
+      // Verificar que existe
+      const [existing] = await db.query(`
+        SELECT 
+          e.*,
+          u.nombre as evaluador_nombre,
+          p.nombre as proyecto_nombre
+        FROM evaluaciones e
+        JOIN usuarios u ON u.id = e.evaluador_id
+        JOIN proyectos p ON p.id = e.proyecto_id
+        WHERE e.id = ?
+      `, [evaluacionId]);
+
+      if (existing.length === 0) {
+        return res.status(404).json({ 
+          ok: false, 
+          mensaje: 'Evaluación no encontrada' 
+        });
+      }
+
+      // Obtener conexión para transacción
+      connection = await db.getConnection();
+      await connection.beginTransaction();
+
+      // Actualizar evaluación
+      const updateFields = [];
+      const updateValues = [];
+
+      if (observaciones !== undefined) {
+        updateFields.push('observaciones = ?');
+        updateValues.push(observaciones || null);
+      }
+
+      if (estado !== undefined) {
+        updateFields.push('estado = ?');
+        updateValues.push(estado);
+      }
+
+      if (fecha_evaluacion !== undefined) {
+        updateFields.push('fecha_evaluacion = ?');
+        updateValues.push(fecha_evaluacion || null);
+      }
+
+      if (updateFields.length > 0) {
+        updateFields.push('updated_at = NOW()');
+        const query = `
+          UPDATE evaluaciones 
+          SET ${updateFields.join(', ')}
+          WHERE id = ?
+        `;
+        updateValues.push(evaluacionId);
+        await connection.query(query, updateValues);
+      }
+
+      // Actualizar detalles si se enviaron
+      if (detalles && Array.isArray(detalles) && detalles.length > 0) {
+        // Eliminar detalles existentes
+        await connection.query(
+          'DELETE FROM detalles_evaluacion WHERE evaluacion_id = ?',
+          [evaluacionId]
+        );
+
+        // Insertar nuevos detalles
+        for (const detalle of detalles) {
+          const puntaje = parseFloat(detalle.puntaje) || 0;
+          const puntajeMaximo = parseFloat(detalle.puntaje_maximo) || 100;
+          
+          await connection.query(`
+            INSERT INTO detalles_evaluacion 
+            (evaluacion_id, criterio_id, nivel_id, puntaje, seccion, criterio, nivel, puntaje_maximo) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          `, [
+            evaluacionId,
+            detalle.criterio_id || null,
+            detalle.nivel_id || null,
+            Math.min(puntaje, puntajeMaximo),
+            detalle.seccion || 'General',
+            detalle.criterio || 'Criterio sin nombre',
+            detalle.nivel || 'Sin nivel',
+            puntajeMaximo
+          ]);
+        }
+      }
+
+      await connection.commit();
+
+      // Registrar log
+      try {
+        await LogsService.registrarActividad({
+          usuario: req.usuario,
+          tipo: 'evaluacion',
+          accion: 'editar_respuestas',
+          entidad_id: evaluacionId,
+          entidad_nombre: `Evaluación #${evaluacionId} - ${existing[0].proyecto_nombre}`,
+          descripcion: `Se editaron las respuestas de la evaluación del proyecto "${existing[0].proyecto_nombre}"`,
+          detalles: { 
+            evaluador: existing[0].evaluador_nombre,
+            observaciones_actualizadas: observaciones !== undefined,
+            total_detalles: detalles?.length || 0,
+            estado: estado || existing[0].estado
+          },
+          req
+        });
+      } catch (logError) {
+        console.error('Error registrando log:', logError);
+      }
+
+      // Obtener evaluación actualizada
+      const [evaluacionActualizada] = await db.query(`
+        SELECT 
+          e.*,
+          u.nombre as evaluador_nombre,
+          p.nombre as proyecto_nombre,
+          r.nombre as rubrica_nombre,
+          c.nombre as concurso_nombre
+        FROM evaluaciones e
+        JOIN usuarios u ON u.id = e.evaluador_id
+        JOIN proyectos p ON p.id = e.proyecto_id
+        JOIN rubricas r ON r.id = e.rubrica_id
+        LEFT JOIN concursos c ON c.id = p.concurso_id
+        WHERE e.id = ?
+      `, [evaluacionId]);
+
+      return res.json({ 
+        ok: true, 
+        mensaje: 'Evaluación actualizada correctamente',
+        data: evaluacionActualizada[0]
+      });
+
+    } catch (error) {
+      if (connection) {
+        await connection.rollback();
+      }
+      console.error('ERROR UPDATE EVALUACION:', error);
+      return res.status(500).json({ 
+        ok: false, 
+        mensaje: 'Error al actualizar evaluación: ' + error.message 
+      });
+    } finally {
+      if (connection) {
+        connection.release();
+      }
+    }
+  },
+
+  /**
+   * FINALIZAR EVALUACIÓN (Evaluador)
+   * POST /api/evaluaciones/:id/finalizar
+   */
+  async finalizarEvaluacion(req, res) {
+    try {
+      const evaluacionId = parseInt(req.params.id);
+      const evaluadorId = req.usuario.id;
+
+      const [evaluacion] = await db.query(`
+        SELECT * FROM evaluaciones 
+        WHERE id = ? AND evaluador_id = ?
+      `, [evaluacionId, evaluadorId]);
+
+      if (evaluacion.length === 0) {
+        return res.status(404).json({ 
+          ok: false, 
+          mensaje: 'Evaluación no encontrada o no asignada a este evaluador' 
+        });
+      }
+
+      if (evaluacion[0].estado === 'evaluado') {
+        return res.status(400).json({ 
+          ok: false, 
+          mensaje: 'La evaluación ya está finalizada' 
+        });
+      }
+
+      await db.query(`
+        UPDATE evaluaciones 
+        SET estado = 'evaluado', 
+            fecha_evaluacion = NOW(),
+            updated_at = NOW()
+        WHERE id = ?
+      `, [evaluacionId]);
+
+      // Registrar log
+      try {
+        await LogsService.registrarActividad({
+          usuario: req.usuario,
+          tipo: 'evaluacion',
+          accion: 'finalizar',
+          entidad_id: evaluacionId,
+          entidad_nombre: `Evaluación #${evaluacionId}`,
+          descripcion: `El evaluador finalizó la evaluación #${evaluacionId}`,
+          req
+        });
+      } catch (logError) {
+        console.error('Error registrando log:', logError);
+      }
+
+      return res.json({ 
+        ok: true, 
+        mensaje: 'Evaluación finalizada correctamente' 
+      });
+
+    } catch (error) {
+      console.error('ERROR FINALIZAR EVALUACION:', error);
+      return res.status(500).json({ 
+        ok: false, 
+        mensaje: 'Error al finalizar evaluación: ' + error.message 
+      });
+    }
+  },
+
+  /**
+   * REABRIR EVALUACIÓN (Admin)
+   * PUT /api/evaluaciones/:id/reabrir
+   */
+  async reabrirEvaluacion(req, res) {
+    try {
+      const evaluacionId = parseInt(req.params.id);
+
+      const [evaluacion] = await db.query(`
+        SELECT e.*, p.nombre as proyecto_nombre 
+        FROM evaluaciones e
+        JOIN proyectos p ON p.id = e.proyecto_id
+        WHERE e.id = ?
+      `, [evaluacionId]);
+
+      if (evaluacion.length === 0) {
+        return res.status(404).json({ 
+          ok: false, 
+          mensaje: 'Evaluación no encontrada' 
+        });
+      }
+
+      await db.query(`
+        UPDATE evaluaciones 
+        SET estado = 'asignado', 
+            fecha_evaluacion = NULL,
+            updated_at = NOW() 
+        WHERE id = ?
+      `, [evaluacionId]);
+
+      // Registrar log
+      try {
+        await LogsService.registrarActividad({
+          usuario: req.usuario,
+          tipo: 'evaluacion',
+          accion: 'reabrir',
+          entidad_id: evaluacionId,
+          entidad_nombre: `Evaluación #${evaluacionId} - ${evaluacion[0].proyecto_nombre}`,
+          descripcion: `Se reabrió la evaluación del proyecto "${evaluacion[0].proyecto_nombre}"`,
+          req
+        });
+      } catch (logError) {
+        console.error('Error registrando log:', logError);
+      }
+
+      return res.json({ 
+        ok: true, 
+        mensaje: 'Evaluación reabierta correctamente' 
+      });
+
+    } catch (error) {
+      console.error('ERROR REABRIR EVALUACION:', error);
+      return res.status(500).json({ 
+        ok: false, 
+        mensaje: 'Error al reabrir evaluación: ' + error.message 
+      });
+    }
+  },
+
+  /**
+   * ELIMINAR EVALUACIÓN (Admin)
+   * DELETE /api/evaluaciones/:id
+   */
+  async eliminarEvaluacion(req, res) {
+    try {
+      const evaluacionId = parseInt(req.params.id);
+
+      const [evaluacion] = await db.query(`
+        SELECT e.*, p.nombre as proyecto_nombre 
+        FROM evaluaciones e
+        JOIN proyectos p ON p.id = e.proyecto_id
+        WHERE e.id = ?
+      `, [evaluacionId]);
+
+      if (evaluacion.length === 0) {
+        return res.status(404).json({ 
+          ok: false, 
+          mensaje: 'Evaluación no encontrada' 
+        });
+      }
+
+      // Eliminar detalles primero
+      await db.query(
+        'DELETE FROM detalles_evaluacion WHERE evaluacion_id = ?',
+        [evaluacionId]
+      );
+
+      // Eliminar evaluación
+      await db.query(
+        'DELETE FROM evaluaciones WHERE id = ?',
+        [evaluacionId]
+      );
+
+      // Registrar log
+      try {
+        await LogsService.registrarActividad({
+          usuario: req.usuario,
+          tipo: 'evaluacion',
+          accion: 'eliminar',
+          entidad_id: evaluacionId,
+          entidad_nombre: `Evaluación #${evaluacionId} - ${evaluacion[0].proyecto_nombre}`,
+          descripcion: `Se eliminó la evaluación del proyecto "${evaluacion[0].proyecto_nombre}"`,
+          req
+        });
+      } catch (logError) {
+        console.error('Error registrando log:', logError);
+      }
+
+      return res.json({ 
+        ok: true, 
+        mensaje: 'Evaluación eliminada correctamente' 
+      });
+
+    } catch (error) {
+      console.error('ERROR ELIMINAR EVALUACION:', error);
+      return res.status(500).json({ 
+        ok: false, 
+        mensaje: 'Error al eliminar evaluación: ' + error.message 
+      });
+    }
   }
+
 };
 
 module.exports = evaluacionController;

@@ -231,7 +231,7 @@ const controller = {
     try {
       const asignacionId = req.params.id;
 
-      // ✅ Obtener datos de la asignación antes de eliminar (para el log)
+      // Obtener datos de la asignación antes de eliminar (para el log)
       let proyectoNombre = 'Proyecto';
       let evaluadorNombre = 'Evaluador';
       let proyectoId = null;
@@ -259,7 +259,7 @@ const controller = {
 
       await AsignacionService.eliminar(asignacionId);
 
-      // ✅ LOG: Asignación eliminada
+      // LOG: Asignación eliminada
       try {
         await LogsService.registrarActividad({
           usuario: req.usuario,
