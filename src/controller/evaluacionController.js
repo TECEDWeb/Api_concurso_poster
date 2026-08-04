@@ -493,7 +493,6 @@ const evaluacionController = {
         updateValues.push(estado);
       }
 
-      // NOTA: Se eliminó la columna 'updated_at' porque no existe en tu BD
       if (updateFields.length > 0) {
         const query = `
           UPDATE evaluaciones 
@@ -512,19 +511,16 @@ const evaluacionController = {
           [evaluacionId]
         );
 
-        // Insertar nuevos detalles (SE ELIMINARON 'puntaje' y 'puntaje_maximo' porque no existen en tu BD)
+        // Insertar nuevos detalles (SOLO LAS COLUMNAS QUE EXISTEN EN TU BD)
         for (const detalle of detalles) {
           await connection.query(`
             INSERT INTO detalles_evaluacion 
-            (evaluacion_id, criterio_id, nivel_id, seccion, criterio, nivel) 
-            VALUES (?, ?, ?, ?, ?, ?)
+            (evaluacion_id, criterio_id, nivel_id) 
+            VALUES (?, ?, ?)
           `, [
             evaluacionId,
             detalle.criterio_id || null,
-            detalle.nivel_id || null,
-            detalle.seccion || 'General',
-            detalle.criterio || 'Criterio sin nombre',
-            detalle.nivel || 'Sin nivel'
+            detalle.nivel_id || null
           ]);
         }
       }
@@ -618,7 +614,6 @@ const evaluacionController = {
         });
       }
 
-      // SE ELIMINÓ 'updated_at' porque no existe en tu BD
       await db.query(`
         UPDATE evaluaciones 
         SET estado = 'evaluado', 
@@ -677,7 +672,6 @@ const evaluacionController = {
         });
       }
 
-      // SE ELIMINÓ 'updated_at' porque no existe en tu BD
       await db.query(`
         UPDATE evaluaciones 
         SET estado = 'asignado', 
