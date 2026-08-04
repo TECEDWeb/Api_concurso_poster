@@ -715,9 +715,7 @@ exports.detalleProyecto = async (req, res) => {
   }
 };
 
-// =====================================
-// DETALLE COMPLETO: RESPUESTAS DE UN EVALUADOR EN UN PROYECTO
-// =====================================
+
 exports.detalleEvaluacion = async (req, res) => {
   try {
     const evaluacionId = parseInt(req.params.evaluacionId);
@@ -749,10 +747,14 @@ exports.detalleEvaluacion = async (req, res) => {
     const info = cabecera[0];
     const puntajeMaximo = await calcularPuntajeMaximoReal(info.concursoId);
 
+    // ✅ FIX: ahora traemos cr.id y n.id, que es lo que necesita
+    // el frontend para poder editar y guardar de vuelta.
     const [detallesRaw] = await db.query(`
       SELECT 
         s.nombre AS seccion,
+        cr.id AS criterioId,
         cr.texto AS criterio,
+        n.id AS nivelId,
         n.nombre AS nivel,
         n.puntaje AS puntaje
       FROM detalles_evaluacion d
@@ -763,9 +765,37 @@ exports.detalleEvaluacion = async (req, res) => {
       ORDER BY s.orden, cr.orden
     `, [evaluacionId]);
 
-    const detalles = detallesRaw.map(d => ({
-      ...d,
-      puntaje: num(d.puntaje)
+    // ✅ FIX: para cada criterio, traemos las opciones REALES de nivel
+    // (propias del criterio, o la escala global del concurso si no tiene propias)
+    // en vez de que el frontend invente Bajo/Medio/Alto.
+    const detalles = await Promise.all(detallesRaw.map(async (d) => {
+      const [nivelesPropios] = await db.query(
+        `SELECT id, nombre, puntaje FROM niveles WHERE criterio_id = ? ORDER BY puntaje DESC`,
+        [d.criterioId]
+      );
+
+      let opciones = nivelesPropios;
+      if (!opciones.length) {
+        const [nivelesGlobales] = await db.query(
+          `SELECT id, nombre, puntaje FROM niveles WHERE concurso_id = ? AND criterio_id IS NULL ORDER BY puntaje DESC`,
+          [info.concursoId]
+        );
+        opciones = nivelesGlobales;
+      }
+
+      return {
+        seccion: d.seccion,
+        criterio_id: d.criterioId,
+        criterio: d.criterio,
+        nivel_id: d.nivelId,
+        nivel: d.nivel,
+        puntaje: num(d.puntaje),
+        opciones: opciones.map(o => ({
+          nivel_id: o.id,
+          nombre: o.nombre,
+          puntaje: num(o.puntaje)
+        }))
+      };
     }));
 
     // ✅ LOG: Detalle de evaluación consultado
@@ -782,7 +812,6 @@ exports.detalleEvaluacion = async (req, res) => {
       });
     } catch (logError) {
       console.error("Error registrando log:", logError);
-      // No interrumpimos el flujo si falla el log
     }
 
     return res.json({
@@ -807,7 +836,6 @@ exports.detalleEvaluacion = async (req, res) => {
     return res.status(500).json({ ok: false, mensaje: 'Error obteniendo detalle de la evaluación' });
   }
 };
-
 // =====================================
 // EXPORTAR PDF GENERAL (con jsPDF)
 // =====================================
