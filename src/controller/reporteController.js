@@ -1,17 +1,31 @@
 const db = require('../config/db');
+const ReporteService = require('../services/reporteService');
 const ExcelJS = require('exceljs');
 const { jsPDF } = require('jspdf');
 const autoTable = require('jspdf-autotable').default;
 const { calcularPuntajeMaximoReal, calcularPuntajesMaximosPorConcursos } = require('../utils/puntajeMaximo');
 const LogsService = require('../services/logsService');
 
-// Helper: fuerza a número cualquier valor que MySQL pueda devolver como string
-function num(valor) {
-  return Number(valor) || 0;
+// ============================================
+// HELPER: validar acceso a concurso
+// ============================================
+async function validarAccesoConcurso(usuario, concursoId) {
+  if (usuario.rol === 'admin') return true;
+
+  if (usuario.rol === 'coordinador') {
+    const [rows] = await db.query(
+      `SELECT id FROM concursos WHERE id = ? AND coordinador_id = ?`,
+      [concursoId, usuario.id]
+    );
+    return rows.length > 0;
+  }
+
+  return false;
 }
 
-// Helper: limpia un nombre de proyecto para usarlo de forma segura
-// en un header HTTP (Content-Disposition).
+// ============================================
+// HELPER: nombre seguro
+// ============================================
 function nombreSeguro(nombre) {
   return (nombre || 'proyecto')
     .normalize('NFD')
@@ -22,7 +36,7 @@ function nombreSeguro(nombre) {
 }
 
 // ============================================
-// HELPER: participantes y tutores
+// HELPER: personas por proyectos
 // ============================================
 async function obtenerPersonasPorProyectos(proyectoIds) {
   if (!proyectoIds || proyectoIds.length === 0) {
@@ -106,7 +120,9 @@ async function obtenerPersonasDeProyecto(proyectoId) {
   return { participantes, tutores };
 }
 
-// Colores institucionales UPSE en formato RGB (0-255) para jsPDF
+// ============================================
+// HELPER: generar PDF buffer
+// ============================================
 const COLOR_AZUL = [0, 51, 102];
 const COLOR_GRIS = [100, 116, 139];
 const COLOR_GRIS_CLARO = [248, 250, 252];
@@ -201,9 +217,9 @@ function generarPdfBuffer({ titulo, subtitulo, descripcion, estadisticas, tablaT
   return Buffer.from(arrayBuffer);
 }
 
-// =====================================
+// ============================================
 // STATS GENERALES
-// =====================================
+// ============================================
 exports.stats = async (req, res) => {
   try {
     const [[proyectos]] = await db.query('SELECT COUNT(*) AS total FROM proyectos');
@@ -221,12 +237,11 @@ exports.stats = async (req, res) => {
           GROUP BY e.id
         ) AS puntajes
       `);
-      promedio = num(promedioResult[0].promedio);
+      promedio = Number(promedioResult[0].promedio) || 0;
     } catch (e) {
       promedio = 0;
     }
 
-    // ✅ LOG: Estadísticas consultadas (solo si hay datos significativos)
     try {
       await LogsService.registrarActividad({
         usuario: req.usuario,
@@ -234,21 +249,20 @@ exports.stats = async (req, res) => {
         accion: 'consultar',
         entidad_id: null,
         entidad_nombre: 'Estadísticas generales',
-        descripcion: `Consultó estadísticas: ${num(proyectos.total)} proyectos, ${num(evaluaciones.total)} evaluaciones`,
-        detalles: { proyectos: num(proyectos.total), evaluaciones: num(evaluaciones.total), completadas: num(completadas.total), promedio: Math.round(promedio * 10) / 10 },
+        descripcion: `Consultó estadísticas: ${Number(proyectos.total)} proyectos, ${Number(evaluaciones.total)} evaluaciones`,
+        detalles: { proyectos: Number(proyectos.total), evaluaciones: Number(evaluaciones.total), completadas: Number(completadas.total), promedio: Math.round(promedio * 10) / 10 },
         req
       });
     } catch (logError) {
       console.error("Error registrando log:", logError);
-      // No interrumpimos el flujo si falla el log
     }
 
     return res.json({
       ok: true,
       data: {
-        proyectos: num(proyectos.total),
-        evaluaciones: num(evaluaciones.total),
-        completadas: num(completadas.total),
+        proyectos: Number(proyectos.total),
+        evaluaciones: Number(evaluaciones.total),
+        completadas: Number(completadas.total),
         promedio: Math.round(promedio * 10) / 10
       }
     });
@@ -259,9 +273,9 @@ exports.stats = async (req, res) => {
   }
 };
 
-// =====================================
+// ============================================
 // RANKING GENERAL
-// =====================================
+// ============================================
 exports.ranking = async (req, res) => {
   try {
     const [rows] = await db.query(`
@@ -279,11 +293,10 @@ exports.ranking = async (req, res) => {
 
     const data = rows.map(r => ({
       proyecto: r.proyecto,
-      puntaje_total: num(r.puntaje_total),
-      promedio: num(r.promedio)
+      puntaje_total: Number(r.puntaje_total) || 0,
+      promedio: Number(r.promedio) || 0
     }));
 
-    // ✅ LOG: Ranking consultado
     try {
       await LogsService.registrarActividad({
         usuario: req.usuario,
@@ -297,7 +310,6 @@ exports.ranking = async (req, res) => {
       });
     } catch (logError) {
       console.error("Error registrando log:", logError);
-      // No interrumpimos el flujo si falla el log
     }
 
     return res.json({ ok: true, data });
@@ -308,9 +320,9 @@ exports.ranking = async (req, res) => {
   }
 };
 
-// =====================================
+// ============================================
 // REPORTES POR PROYECTO
-// =====================================
+// ============================================
 exports.proyectos = async (req, res) => {
   try {
     const [rows] = await db.query(`
@@ -362,7 +374,7 @@ exports.proyectos = async (req, res) => {
         proyecto.evaluadores.push({
           nombre: row.evaluador,
           rol: row.rol,
-          puntaje: num(row.puntajeTotalEvaluacion)
+          puntaje: Number(row.puntajeTotalEvaluacion) || 0
         });
       }
     });
@@ -382,7 +394,6 @@ exports.proyectos = async (req, res) => {
       p.tutores = tutoresPorProyecto[p.id] || [];
     });
 
-    // ✅ LOG: Reporte de proyectos consultado
     try {
       const totalEvaluadores = proyectos.reduce((acc, p) => acc + p.evaluadores.length, 0);
       await LogsService.registrarActividad({
@@ -397,7 +408,6 @@ exports.proyectos = async (req, res) => {
       });
     } catch (logError) {
       console.error("Error registrando log:", logError);
-      // No interrumpimos el flujo si falla el log
     }
 
     return res.json({ ok: true, data: proyectos });
@@ -408,9 +418,9 @@ exports.proyectos = async (req, res) => {
   }
 };
 
-// =====================================
+// ============================================
 // EXPORTAR REPORTE EXCEL GENERAL
-// =====================================
+// ============================================
 exports.exportar = async (req, res) => {
   try {
     const [rows] = await db.query(`
@@ -444,14 +454,13 @@ exports.exportar = async (req, res) => {
       proyecto: row.proyecto,
       evaluador: row.evaluador,
       rol: row.rol,
-      puntaje: num(row.puntaje),
-      promedio: num(row.promedio)
+      puntaje: Number(row.puntaje) || 0,
+      promedio: Number(row.promedio) || 0
     }));
 
     sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF003366' } };
     sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
 
-    // ✅ LOG: Exportación Excel general
     try {
       await LogsService.registrarActividad({
         usuario: req.usuario,
@@ -465,7 +474,6 @@ exports.exportar = async (req, res) => {
       });
     } catch (logError) {
       console.error("Error registrando log:", logError);
-      // No interrumpimos el flujo si falla el log
     }
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -480,9 +488,9 @@ exports.exportar = async (req, res) => {
   }
 };
 
-// =====================================
+// ============================================
 // EXPORTAR REPORTE EXCEL POR PROYECTO
-// =====================================
+// ============================================
 exports.exportarProyecto = async (req, res) => {
   try {
     const proyectoId = parseInt(req.params.proyectoId);
@@ -516,8 +524,8 @@ exports.exportarProyecto = async (req, res) => {
     const rows = rawRows.map(r => ({
       evaluador: r.evaluador,
       rol: r.rol,
-      puntaje: num(r.puntaje),
-      promedio: num(r.promedio)
+      puntaje: Number(r.puntaje) || 0,
+      promedio: Number(r.promedio) || 0
     }));
 
     const workbook = new ExcelJS.Workbook();
@@ -564,7 +572,6 @@ exports.exportarProyecto = async (req, res) => {
       totalRow.height = 25;
     }
 
-    // ✅ LOG: Exportación Excel por proyecto
     try {
       await LogsService.registrarActividad({
         usuario: req.usuario,
@@ -578,7 +585,6 @@ exports.exportarProyecto = async (req, res) => {
       });
     } catch (logError) {
       console.error("Error registrando log:", logError);
-      // No interrumpimos el flujo si falla el log
     }
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -593,9 +599,9 @@ exports.exportarProyecto = async (req, res) => {
   }
 };
 
-// =====================================
+// ============================================
 // DETALLE DE PROYECTO
-// =====================================
+// ============================================
 exports.detalleProyecto = async (req, res) => {
   try {
     const proyectoId = parseInt(req.params.proyectoId);
@@ -631,7 +637,7 @@ exports.detalleProyecto = async (req, res) => {
 
     const evaluaciones = evaluacionesRaw.map(e => ({
       ...e,
-      puntaje_total: num(e.puntaje_total)
+      puntaje_total: Number(e.puntaje_total) || 0
     }));
 
     const [evaluadoresRaw] = await db.query(`
@@ -654,8 +660,8 @@ exports.detalleProyecto = async (req, res) => {
       evaluadorId: e.evaluador_id,
       nombre: e.nombre,
       rol: e.rol,
-      puntaje: num(e.puntaje),
-      promedio: num(e.promedio)
+      puntaje: Number(e.puntaje) || 0,
+      promedio: Number(e.promedio) || 0
     }));
 
     const [promedioResult] = await db.query(`
@@ -673,7 +679,6 @@ exports.detalleProyecto = async (req, res) => {
 
     const { participantes, tutores } = await obtenerPersonasDeProyecto(proyectoId);
 
-    // ✅ LOG: Detalle de proyecto consultado
     try {
       await LogsService.registrarActividad({
         usuario: req.usuario,
@@ -687,7 +692,6 @@ exports.detalleProyecto = async (req, res) => {
       });
     } catch (logError) {
       console.error("Error registrando log:", logError);
-      // No interrumpimos el flujo si falla el log
     }
 
     return res.json({
@@ -703,7 +707,7 @@ exports.detalleProyecto = async (req, res) => {
         evaluadores,
         participantes,
         tutores,
-        promedio: num(promedioResult[0]?.promedio),
+        promedio: Number(promedioResult[0]?.promedio) || 0,
         puntajeMaximo,
         totalEvaluaciones: evaluaciones.length
       }
@@ -715,7 +719,9 @@ exports.detalleProyecto = async (req, res) => {
   }
 };
 
-
+// ============================================
+// DETALLE DE EVALUACION
+// ============================================
 exports.detalleEvaluacion = async (req, res) => {
   try {
     const evaluacionId = parseInt(req.params.evaluacionId);
@@ -747,8 +753,6 @@ exports.detalleEvaluacion = async (req, res) => {
     const info = cabecera[0];
     const puntajeMaximo = await calcularPuntajeMaximoReal(info.concursoId);
 
-    // ✅ FIX: ahora traemos cr.id y n.id, que es lo que necesita
-    // el frontend para poder editar y guardar de vuelta.
     const [detallesRaw] = await db.query(`
       SELECT 
         s.nombre AS seccion,
@@ -765,9 +769,6 @@ exports.detalleEvaluacion = async (req, res) => {
       ORDER BY s.orden, cr.orden
     `, [evaluacionId]);
 
-    // ✅ FIX: para cada criterio, traemos las opciones REALES de nivel
-    // (propias del criterio, o la escala global del concurso si no tiene propias)
-    // en vez de que el frontend invente Bajo/Medio/Alto.
     const detalles = await Promise.all(detallesRaw.map(async (d) => {
       const [nivelesPropios] = await db.query(
         `SELECT id, nombre, puntaje FROM niveles WHERE criterio_id = ? ORDER BY puntaje DESC`,
@@ -789,16 +790,15 @@ exports.detalleEvaluacion = async (req, res) => {
         criterio: d.criterio,
         nivel_id: d.nivelId,
         nivel: d.nivel,
-        puntaje: num(d.puntaje),
+        puntaje: Number(d.puntaje) || 0,
         opciones: opciones.map(o => ({
           nivel_id: o.id,
           nombre: o.nombre,
-          puntaje: num(o.puntaje)
+          puntaje: Number(o.puntaje) || 0
         }))
       };
     }));
 
-    // ✅ LOG: Detalle de evaluación consultado
     try {
       await LogsService.registrarActividad({
         usuario: req.usuario,
@@ -836,9 +836,10 @@ exports.detalleEvaluacion = async (req, res) => {
     return res.status(500).json({ ok: false, mensaje: 'Error obteniendo detalle de la evaluación' });
   }
 };
-// =====================================
-// EXPORTAR PDF GENERAL (con jsPDF)
-// =====================================
+
+// ============================================
+// EXPORTAR PDF GENERAL
+// ============================================
 exports.exportarPDF = async (req, res) => {
   try {
     const [rawRows] = await db.query(`
@@ -861,8 +862,8 @@ exports.exportarPDF = async (req, res) => {
       proyecto: r.proyecto,
       evaluador: r.evaluador,
       rol: r.rol,
-      puntaje: num(r.puntaje),
-      promedio: num(r.promedio)
+      puntaje: Number(r.puntaje) || 0,
+      promedio: Number(r.promedio) || 0
     }));
 
     const totalProyectos = new Set(rows.map(r => r.proyecto)).size;
@@ -886,7 +887,6 @@ exports.exportarPDF = async (req, res) => {
       ])
     });
 
-    // ✅ LOG: Exportación PDF general
     try {
       await LogsService.registrarActividad({
         usuario: req.usuario,
@@ -900,7 +900,6 @@ exports.exportarPDF = async (req, res) => {
       });
     } catch (logError) {
       console.error("Error registrando log:", logError);
-      // No interrumpimos el flujo si falla el log
     }
 
     res.setHeader('Content-Type', 'application/pdf');
@@ -913,9 +912,9 @@ exports.exportarPDF = async (req, res) => {
   }
 };
 
-// =====================================
-// EXPORTAR PDF POR PROYECTO (con jsPDF)
-// =====================================
+// ============================================
+// EXPORTAR PDF POR PROYECTO
+// ============================================
 exports.exportarPDFProyecto = async (req, res) => {
   try {
     const proyectoId = parseInt(req.params.proyectoId);
@@ -950,9 +949,9 @@ exports.exportarPDFProyecto = async (req, res) => {
     const rows = rawRows.map(r => ({
       evaluador: r.evaluador,
       rol: r.rol,
-      puntaje: num(r.puntaje),
-      promedio: num(r.promedio),
-      total_evaluaciones: num(r.total_evaluaciones)
+      puntaje: Number(r.puntaje) || 0,
+      promedio: Number(r.promedio) || 0,
+      total_evaluaciones: Number(r.total_evaluaciones) || 0
     }));
 
     const nombreArchivo = rows.length === 0
@@ -973,7 +972,7 @@ exports.exportarPDFProyecto = async (req, res) => {
         `Total de evaluadores: ${totalEvaluadores}`,
         `Puntaje total: ${puntajeTotal.toFixed(2)} pts`,
         `Promedio general: ${promedioGeneral.toFixed(2)} pts`
-      ] : [], 
+      ] : [],
       tablaTitulo: rows.length ? 'Evaluadores' : null,
       tablaHeaders: ['Evaluador', 'Rol', 'Puntaje', 'Promedio'],
       tablaFilas: rows.map(r => [
@@ -984,7 +983,6 @@ exports.exportarPDFProyecto = async (req, res) => {
       ])
     });
 
-    // ✅ LOG: Exportación PDF por proyecto
     try {
       await LogsService.registrarActividad({
         usuario: req.usuario,
@@ -998,7 +996,6 @@ exports.exportarPDFProyecto = async (req, res) => {
       });
     } catch (logError) {
       console.error("Error registrando log:", logError);
-      // No interrumpimos el flujo si falla el log
     }
 
     res.setHeader('Content-Type', 'application/pdf');
@@ -1011,26 +1008,9 @@ exports.exportarPDFProyecto = async (req, res) => {
   }
 };
 
-// =====================================
-// HELPER: verifica que el coordinador solo vea su propio concurso
-// =====================================
-async function validarAccesoConcurso(usuario, concursoId) {
-  if (usuario.rol === 'admin') return true;
-
-  if (usuario.rol === 'coordinador') {
-    const [rows] = await db.query(
-      `SELECT id FROM concursos WHERE id = ? AND coordinador_id = ?`,
-      [concursoId, usuario.id]
-    );
-    return rows.length > 0;
-  }
-
-  return false;
-}
-
-// =====================================
+// ============================================
 // STATS POR CONCURSO
-// =====================================
+// ============================================
 exports.statsByConcurso = async (req, res) => {
   try {
     const concursoId = parseInt(req.params.concursoId);
@@ -1040,51 +1020,11 @@ exports.statsByConcurso = async (req, res) => {
       return res.status(403).json({ ok: false, mensaje: 'No tienes permisos para ver este concurso' });
     }
 
-    const [[proyectos]] = await db.query(
-      `SELECT COUNT(*) AS total FROM proyectos WHERE concurso_id = ?`,
-      [concursoId]
-    );
-
-    const [[evaluaciones]] = await db.query(`
-      SELECT COUNT(*) AS total
-      FROM evaluaciones e
-      JOIN proyectos p ON p.id = e.proyecto_id
-      WHERE p.concurso_id = ?
-    `, [concursoId]);
-
-    const [[completadas]] = await db.query(`
-      SELECT COUNT(*) AS total
-      FROM evaluaciones e
-      JOIN proyectos p ON p.id = e.proyecto_id
-      WHERE p.concurso_id = ? AND e.estado = 'evaluado'
-    `, [concursoId]);
-
-    let promedio = 0;
-    try {
-      const [promedioResult] = await db.query(`
-        SELECT AVG(total_puntaje) AS promedio FROM (
-          SELECT SUM(n.puntaje) AS total_puntaje
-          FROM evaluaciones e
-          JOIN proyectos p ON p.id = e.proyecto_id
-          JOIN detalles_evaluacion d ON e.id = d.evaluacion_id
-          JOIN niveles n ON d.nivel_id = n.id
-          WHERE p.concurso_id = ?
-          GROUP BY e.id
-        ) AS puntajes
-      `, [concursoId]);
-      promedio = num(promedioResult[0].promedio);
-    } catch (e) {
-      promedio = 0;
-    }
+    const stats = await ReporteService.getStatsByConcurso(concursoId);
 
     return res.json({
       ok: true,
-      data: {
-        proyectos: num(proyectos.total),
-        evaluaciones: num(evaluaciones.total),
-        completadas: num(completadas.total),
-        promedio: Math.round(promedio * 10) / 10
-      }
+      data: stats
     });
 
   } catch (error) {
@@ -1093,9 +1033,9 @@ exports.statsByConcurso = async (req, res) => {
   }
 };
 
-// =====================================
+// ============================================
 // EXPORTAR PDF POR CONCURSO
-// =====================================
+// ============================================
 exports.exportarPDFConcurso = async (req, res) => {
   try {
     const concursoId = parseInt(req.params.concursoId);
@@ -1105,10 +1045,7 @@ exports.exportarPDFConcurso = async (req, res) => {
       return res.status(403).json({ ok: false, mensaje: 'No tienes permisos para ver este concurso' });
     }
 
-    const [[concursoInfo]] = await db.query(
-      `SELECT nombre FROM concursos WHERE id = ?`,
-      [concursoId]
-    );
+    const concursoInfo = await ReporteService.getConcursoById(concursoId);
 
     if (!concursoInfo) {
       return res.status(404).json({ ok: false, mensaje: 'Concurso no encontrado' });
@@ -1135,8 +1072,8 @@ exports.exportarPDFConcurso = async (req, res) => {
       proyecto: r.proyecto,
       evaluador: r.evaluador,
       rol: r.rol,
-      puntaje: num(r.puntaje),
-      promedio: num(r.promedio)
+      puntaje: Number(r.puntaje) || 0,
+      promedio: Number(r.promedio) || 0
     }));
 
     const totalProyectos = new Set(rows.map(r => r.proyecto)).size;
@@ -1188,9 +1125,9 @@ exports.exportarPDFConcurso = async (req, res) => {
   }
 };
 
-// =====================================
+// ============================================
 // EXPORTAR EXCEL POR CONCURSO
-// =====================================
+// ============================================
 exports.exportarExcelConcurso = async (req, res) => {
   try {
     const concursoId = parseInt(req.params.concursoId);
@@ -1200,10 +1137,7 @@ exports.exportarExcelConcurso = async (req, res) => {
       return res.status(403).json({ ok: false, mensaje: 'No tienes permisos para ver este concurso' });
     }
 
-    const [[concursoInfo]] = await db.query(
-      `SELECT nombre FROM concursos WHERE id = ?`,
-      [concursoId]
-    );
+    const concursoInfo = await ReporteService.getConcursoById(concursoId);
 
     if (!concursoInfo) {
       return res.status(404).json({ ok: false, mensaje: 'Concurso no encontrado' });
@@ -1256,8 +1190,8 @@ exports.exportarExcelConcurso = async (req, res) => {
         row.proyecto,
         row.evaluador || 'Sin evaluar',
         row.rol || '',
-        num(row.puntaje),
-        num(row.promedio)
+        Number(row.puntaje) || 0,
+        Number(row.promedio) || 0
       ];
       rowData.alignment = { vertical: 'middle' };
       rowData.height = 25;
@@ -1288,5 +1222,68 @@ exports.exportarExcelConcurso = async (req, res) => {
   } catch (error) {
     console.error('ERROR EXPORTAR EXCEL CONCURSO:', error);
     return res.status(500).json({ ok: false, mensaje: 'Error generando Excel del concurso' });
+  }
+};
+
+// ============================================
+// OBTENER JURADO POR CONCURSO (NUEVO)
+// ============================================
+exports.getJuradoByConcurso = async (req, res) => {
+  try {
+    const concursoId = parseInt(req.params.concursoId);
+
+    if (!concursoId) {
+      return res.status(400).json({
+        ok: false,
+        mensaje: 'El ID del concurso es requerido'
+      });
+    }
+
+    // Verificar que el concurso existe
+    const concursoInfo = await ReporteService.getConcursoById(concursoId);
+
+    if (!concursoInfo) {
+      return res.status(404).json({
+        ok: false,
+        mensaje: 'Concurso no encontrado'
+      });
+    }
+
+    // Verificar acceso
+    const tieneAcceso = await validarAccesoConcurso(req.usuario, concursoId);
+    if (!tieneAcceso) {
+      return res.status(403).json({
+        ok: false,
+        mensaje: 'No tienes permisos para ver este concurso'
+      });
+    }
+
+    // Obtener jurado con detalles
+    const jurado = await ReporteService.getJuradoDetalleByConcurso(concursoId);
+
+    // Formatear para el frontend
+    const juradoFormateado = jurado.map(j => ({
+      id: j.id,
+      nombre: j.nombre,
+      rol: j.rol,
+      email: j.email,
+      departamento: j.departamento,
+      cedula: j.cedula,
+      proyectosAsignados: j.proyectos_asignados || 0,
+      proyectosEvaluados: j.proyectos_evaluados || 0
+    }));
+
+    return res.json({
+      ok: true,
+      data: juradoFormateado,
+      concurso: concursoInfo.nombre
+    });
+
+  } catch (error) {
+    console.error('ERROR GET JURADO:', error);
+    return res.status(500).json({
+      ok: false,
+      mensaje: 'Error obteniendo el jurado del concurso'
+    });
   }
 };
