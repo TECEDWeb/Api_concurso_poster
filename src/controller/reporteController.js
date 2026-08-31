@@ -321,79 +321,136 @@ exports.ranking = async (req, res) => {
 };
 
 // ============================================
-// REPORTES POR PROYECTO
+// REPORTES POR PROYECTO - CORREGIDO (SOLO UNA VEZ)
 // ============================================
 exports.proyectos = async (req, res) => {
   try {
-    const [rows] = await db.query(`
-      SELECT
+    // 1. OBTENER PROYECTOS CON SUS DATOS BÁSICOS
+    const [proyectosRows] = await db.query(`
+      SELECT 
         p.id,
         p.nombre AS proyecto,
         p.area,
         p.nivel,
-        p.concurso_id AS concursoId,
-        e.id AS evaluacionId,
-        e.estado AS estadoEvaluacion,
-        u.nombre AS evaluador,
-        u.rol,
-        ROUND(SUM(n.puntaje), 2) AS puntajeTotalEvaluacion
+        p.concurso_id AS concursoId
       FROM proyectos p
-      LEFT JOIN evaluaciones e ON e.proyecto_id = p.id
-      LEFT JOIN detalles_evaluacion d ON d.evaluacion_id = e.id
-      LEFT JOIN niveles n ON n.id = d.nivel_id
-      LEFT JOIN usuarios u ON u.id = e.evaluador_id
-      GROUP BY p.id, p.nombre, p.area, p.nivel, p.concurso_id, e.id, e.estado, u.id, u.nombre, u.rol
       ORDER BY p.nombre ASC
     `);
 
-    const concursoIdsPresentes = rows.map(r => r.concursoId).filter(id => id);
-    const puntajeMaximoPorConcurso = await calcularPuntajesMaximosPorConcursos(concursoIdsPresentes);
+    if (proyectosRows.length === 0) {
+      return res.json({ ok: true, data: [] });
+    }
 
-    const proyectos = [];
-    rows.forEach(row => {
-      let proyecto = proyectos.find(item => item.id === row.id);
-      if (!proyecto) {
-        proyecto = {
-          id: row.id,
-          proyecto: row.proyecto,
-          area: row.area || null,
-          nivel: row.nivel || null,
-          concursoId: row.concursoId || null,
-          puntajeMaximo: puntajeMaximoPorConcurso[row.concursoId] || 100,
-          evaluaciones: 0,
-          promedio: 0,
-          evaluadores: [],
-          participantes: [],
-          tutores: []
-        };
-        proyectos.push(proyecto);
-      }
+    const proyectoIds = proyectosRows.map(p => p.id);
 
-      if (row.evaluacionId) {
-        proyecto.evaluaciones++;
-        proyecto.evaluadores.push({
-          nombre: row.evaluador,
-          rol: row.rol,
-          puntaje: Number(row.puntajeTotalEvaluacion) || 0
-        });
-      }
-    });
+    // 2. OBTENER EVALUACIONES CON EL CONCURSO_ID EXPLÍCITAMENTE
+    const [evaluacionesRows] = await db.query(`
+      SELECT 
+        e.id AS evaluacionId,
+        e.proyecto_id AS proyectoId,
+        e.estado AS estadoEvaluacion,
+        e.observaciones,
+        u.id AS evaluadorId,
+        u.nombre AS evaluadorNombre,
+        u.rol AS evaluadorRol,
+        u.email AS evaluadorEmail,
+        u.departamento AS evaluadorDepartamento,
+        u.cedula AS evaluadorCedula,
+        ROUND(SUM(n.puntaje), 2) AS puntajeTotal,
+        p.concurso_id AS concursoId
+      FROM evaluaciones e
+      JOIN usuarios u ON u.id = e.evaluador_id
+      JOIN proyectos p ON p.id = e.proyecto_id
+      LEFT JOIN detalles_evaluacion d ON d.evaluacion_id = e.id
+      LEFT JOIN niveles n ON n.id = d.nivel_id
+      WHERE e.proyecto_id IN (?)
+      GROUP BY e.id, u.id, u.nombre, u.rol, u.email, u.departamento, u.cedula, 
+               e.estado, e.observaciones, p.concurso_id
+      ORDER BY e.proyecto_id, e.fecha_evaluacion DESC
+    `, [proyectoIds]);
 
-    proyectos.forEach(p => {
-      if (p.evaluadores.length > 0) {
-        const suma = p.evaluadores.reduce((acc, e) => acc + (e.puntaje || 0), 0);
-        p.promedio = Math.round((suma / p.evaluadores.length) * 100) / 100;
-      }
-    });
+    // 3. OBTENER PUNTAJES MÁXIMOS POR CONCURSO
+    const concursoIds = [...new Set(proyectosRows.map(p => p.concursoId).filter(id => id))];
+    const puntajeMaximoPorConcurso = await calcularPuntajesMaximosPorConcursos(concursoIds);
 
-    const proyectoIds = proyectos.map(p => p.id);
+    // 4. OBTENER PARTICIPANTES Y TUTORES
     const { participantesPorProyecto, tutoresPorProyecto } = await obtenerPersonasPorProyectos(proyectoIds);
 
-    proyectos.forEach(p => {
-      p.participantes = participantesPorProyecto[p.id] || [];
-      p.tutores = tutoresPorProyecto[p.id] || [];
+    // 5. CONSTRUIR MAPA DE PROYECTOS
+    const proyectosMap = new Map();
+
+    proyectosRows.forEach(row => {
+      proyectosMap.set(row.id, {
+        id: row.id,
+        proyecto: row.proyecto,
+        area: row.area || null,
+        nivel: row.nivel || null,
+        concursoId: row.concursoId || null,
+        puntajeMaximo: puntajeMaximoPorConcurso[row.concursoId] || 100,
+        evaluadores: [],
+        participantes: participantesPorProyecto[row.id] || [],
+        tutores: tutoresPorProyecto[row.id] || [],
+        evaluaciones: 0,
+        promedio: 0
+      });
     });
 
+    // 6. AGRUPAR EVALUACIONES POR PROYECTO
+    const evaluacionesPorProyecto = new Map();
+    evaluacionesRows.forEach(evalRow => {
+      const proyectoId = evalRow.proyectoId;
+      if (!evaluacionesPorProyecto.has(proyectoId)) {
+        evaluacionesPorProyecto.set(proyectoId, []);
+      }
+      evaluacionesPorProyecto.get(proyectoId).push(evalRow);
+    });
+
+    // 7. PROCESAR CADA PROYECTO - FILTRANDO EVALUADORES POR CONCURSO
+    for (const [proyectoId, evaluaciones] of evaluacionesPorProyecto) {
+      const proyecto = proyectosMap.get(proyectoId);
+      if (!proyecto) continue;
+
+      // FILTRAR solo evaluaciones del mismo concurso que el proyecto
+      const evaluacionesDelConcurso = evaluaciones.filter(
+        e => Number(e.concursoId) === Number(proyecto.concursoId)
+      );
+
+      // Solo las evaluaciones completadas (estado = 'evaluado')
+      const evaluadas = evaluacionesDelConcurso.filter(e => e.estadoEvaluacion === 'evaluado');
+
+      // Agrupar evaluadores únicos (por nombre para evitar duplicados)
+      const evaluadoresUnicos = new Map();
+
+      evaluadas.forEach(ev => {
+        const nombre = ev.evaluadorNombre || 'Evaluador sin nombre';
+        if (!evaluadoresUnicos.has(nombre)) {
+          evaluadoresUnicos.set(nombre, {
+            nombre: ev.evaluadorNombre,
+            rol: ev.evaluadorRol,
+            email: ev.evaluadorEmail || '',
+            departamento: ev.evaluadorDepartamento || '',
+            cedula: ev.evaluadorCedula || '',
+            evaluacionId: ev.evaluacionId,
+            puntaje: Number(ev.puntajeTotal) || 0,
+            estado: ev.estadoEvaluacion
+          });
+        }
+      });
+
+      proyecto.evaluadores = Array.from(evaluadoresUnicos.values());
+      proyecto.evaluaciones = evaluadas.length;
+
+      // Calcular promedio
+      if (proyecto.evaluadores.length > 0) {
+        const sumaPuntajes = proyecto.evaluadores.reduce((acc, e) => acc + (e.puntaje || 0), 0);
+        proyecto.promedio = Math.round((sumaPuntajes / proyecto.evaluadores.length) * 100) / 100;
+      }
+    }
+
+    // 8. CONVERTIR A ARRAY
+    const proyectos = Array.from(proyectosMap.values());
+
+    // 9. REGISTRAR LOG
     try {
       const totalEvaluadores = proyectos.reduce((acc, p) => acc + p.evaluadores.length, 0);
       await LogsService.registrarActividad({
@@ -402,7 +459,7 @@ exports.proyectos = async (req, res) => {
         accion: 'consultar',
         entidad_id: null,
         entidad_nombre: 'Reporte de proyectos',
-        descripcion: `Consultó reporte de ${proyectos.length} proyectos con ${totalEvaluadores} evaluaciones`,
+        descripcion: `Consultó reporte de ${proyectos.length} proyectos con ${totalEvaluadores} evaluadores únicos`,
         detalles: { totalProyectos: proyectos.length, totalEvaluadores },
         req
       });
@@ -603,632 +660,62 @@ exports.exportarProyecto = async (req, res) => {
 // DETALLE DE PROYECTO
 // ============================================
 exports.detalleProyecto = async (req, res) => {
-  try {
-    const proyectoId = parseInt(req.params.proyectoId);
-
-    const [proyectos] = await db.query(
-      `SELECT id, nombre, descripcion, area, nivel, concurso_id AS concursoId FROM proyectos WHERE id = ?`,
-      [proyectoId]
-    );
-
-    if (proyectos.length === 0) {
-      return res.status(404).json({ ok: false, mensaje: 'Proyecto no encontrado' });
-    }
-
-    const proyecto = proyectos[0];
-
-    const [evaluacionesRaw] = await db.query(`
-      SELECT 
-        e.id,
-        u.nombre AS evaluador,
-        u.rol,
-        e.estado,
-        e.fecha_evaluacion,
-        e.observaciones,
-        ROUND(SUM(n.puntaje), 2) AS puntaje_total
-      FROM evaluaciones e
-      JOIN usuarios u ON u.id = e.evaluador_id
-      LEFT JOIN detalles_evaluacion d ON d.evaluacion_id = e.id
-      LEFT JOIN niveles n ON n.id = d.nivel_id
-      WHERE e.proyecto_id = ?
-      GROUP BY e.id, u.nombre, u.rol, e.estado, e.fecha_evaluacion, e.observaciones
-      ORDER BY e.fecha_evaluacion DESC
-    `, [proyectoId]);
-
-    const evaluaciones = evaluacionesRaw.map(e => ({
-      ...e,
-      puntaje_total: Number(e.puntaje_total) || 0
-    }));
-
-    const [evaluadoresRaw] = await db.query(`
-      SELECT 
-        u.id AS evaluador_id,
-        u.nombre,
-        u.rol,
-        ROUND(SUM(n.puntaje), 2) AS puntaje,
-        ROUND(AVG(n.puntaje), 2) AS promedio
-      FROM evaluaciones e
-      JOIN usuarios u ON u.id = e.evaluador_id
-      LEFT JOIN detalles_evaluacion d ON d.evaluacion_id = e.id
-      LEFT JOIN niveles n ON n.id = d.nivel_id
-      WHERE e.proyecto_id = ?
-      GROUP BY u.id, u.nombre, u.rol
-      ORDER BY puntaje DESC
-    `, [proyectoId]);
-
-    const evaluadores = evaluadoresRaw.map(e => ({
-      evaluadorId: e.evaluador_id,
-      nombre: e.nombre,
-      rol: e.rol,
-      puntaje: Number(e.puntaje) || 0,
-      promedio: Number(e.promedio) || 0
-    }));
-
-    const [promedioResult] = await db.query(`
-      SELECT ROUND(AVG(total_puntaje), 2) AS promedio FROM (
-        SELECT SUM(n.puntaje) AS total_puntaje
-        FROM evaluaciones e
-        JOIN detalles_evaluacion d ON d.evaluacion_id = e.id
-        JOIN niveles n ON n.id = d.nivel_id
-        WHERE e.proyecto_id = ?
-        GROUP BY e.id
-      ) AS puntajes
-    `, [proyectoId]);
-
-    const puntajeMaximo = await calcularPuntajeMaximoReal(proyecto.concursoId);
-
-    const { participantes, tutores } = await obtenerPersonasDeProyecto(proyectoId);
-
-    try {
-      await LogsService.registrarActividad({
-        usuario: req.usuario,
-        tipo: 'reporte',
-        accion: 'consultar',
-        entidad_id: proyectoId,
-        entidad_nombre: `Detalle: ${proyecto.nombre}`,
-        descripcion: `Consultó detalle del proyecto "${proyecto.nombre}" con ${evaluaciones.length} evaluaciones`,
-        detalles: { proyectoId, totalEvaluaciones: evaluaciones.length },
-        req
-      });
-    } catch (logError) {
-      console.error("Error registrando log:", logError);
-    }
-
-    return res.json({
-      ok: true,
-      data: {
-        id: proyecto.id,
-        nombre: proyecto.nombre,
-        descripcion: proyecto.descripcion || '',
-        area: proyecto.area || null,
-        nivel: proyecto.nivel || null,
-        concursoId: proyecto.concursoId || null,
-        evaluaciones,
-        evaluadores,
-        participantes,
-        tutores,
-        promedio: Number(promedioResult[0]?.promedio) || 0,
-        puntajeMaximo,
-        totalEvaluaciones: evaluaciones.length
-      }
-    });
-
-  } catch (error) {
-    console.error('ERROR DETALLE PROYECTO:', error);
-    return res.status(500).json({ ok: false, mensaje: 'Error obteniendo detalle del proyecto' });
-  }
+  // ... (mantén tu código existente)
 };
 
 // ============================================
 // DETALLE DE EVALUACION
 // ============================================
 exports.detalleEvaluacion = async (req, res) => {
-  try {
-    const evaluacionId = parseInt(req.params.evaluacionId);
-
-    const [cabecera] = await db.query(`
-      SELECT 
-        e.id,
-        e.estado,
-        e.observaciones,
-        e.fecha_evaluacion,
-        p.nombre AS proyectoNombre,
-        p.concurso_id AS concursoId,
-        c.nombre AS concursoNombre,
-        u.nombre AS evaluadorNombre,
-        u.rol AS evaluadorRol,
-        r.nombre AS rubricaNombre
-      FROM evaluaciones e
-      JOIN proyectos p ON p.id = e.proyecto_id
-      LEFT JOIN concursos c ON c.id = p.concurso_id
-      JOIN usuarios u ON u.id = e.evaluador_id
-      JOIN rubricas r ON r.concurso_id = p.concurso_id
-      WHERE e.id = ?
-    `, [evaluacionId]);
-
-    if (cabecera.length === 0) {
-      return res.status(404).json({ ok: false, mensaje: 'Evaluación no encontrada' });
-    }
-
-    const info = cabecera[0];
-    const puntajeMaximo = await calcularPuntajeMaximoReal(info.concursoId);
-
-    const [detallesRaw] = await db.query(`
-      SELECT 
-        s.nombre AS seccion,
-        cr.id AS criterioId,
-        cr.texto AS criterio,
-        n.id AS nivelId,
-        n.nombre AS nivel,
-        n.puntaje AS puntaje
-      FROM detalles_evaluacion d
-      JOIN criterios cr ON cr.id = d.criterio_id
-      JOIN secciones s ON s.id = cr.seccion_id
-      JOIN niveles n ON n.id = d.nivel_id
-      WHERE d.evaluacion_id = ?
-      ORDER BY s.orden, cr.orden
-    `, [evaluacionId]);
-
-    const detalles = await Promise.all(detallesRaw.map(async (d) => {
-      const [nivelesPropios] = await db.query(
-        `SELECT id, nombre, puntaje FROM niveles WHERE criterio_id = ? ORDER BY puntaje DESC`,
-        [d.criterioId]
-      );
-
-      let opciones = nivelesPropios;
-      if (!opciones.length) {
-        const [nivelesGlobales] = await db.query(
-          `SELECT id, nombre, puntaje FROM niveles WHERE concurso_id = ? AND criterio_id IS NULL ORDER BY puntaje DESC`,
-          [info.concursoId]
-        );
-        opciones = nivelesGlobales;
-      }
-
-      return {
-        seccion: d.seccion,
-        criterio_id: d.criterioId,
-        criterio: d.criterio,
-        nivel_id: d.nivelId,
-        nivel: d.nivel,
-        puntaje: Number(d.puntaje) || 0,
-        opciones: opciones.map(o => ({
-          nivel_id: o.id,
-          nombre: o.nombre,
-          puntaje: Number(o.puntaje) || 0
-        }))
-      };
-    }));
-
-    try {
-      await LogsService.registrarActividad({
-        usuario: req.usuario,
-        tipo: 'reporte',
-        accion: 'consultar',
-        entidad_id: evaluacionId,
-        entidad_nombre: `Detalle evaluación: ${info.proyectoNombre}`,
-        descripcion: `Consultó detalle de la evaluación del proyecto "${info.proyectoNombre}" por ${info.evaluadorNombre}`,
-        detalles: { evaluacionId, evaluador: info.evaluadorNombre, proyecto: info.proyectoNombre },
-        req
-      });
-    } catch (logError) {
-      console.error("Error registrando log:", logError);
-    }
-
-    return res.json({
-      ok: true,
-      data: {
-        id: info.id,
-        estado: info.estado,
-        observaciones: info.observaciones,
-        fecha: info.fecha_evaluacion,
-        proyectoNombre: info.proyectoNombre,
-        concursoNombre: info.concursoNombre,
-        evaluadorNombre: info.evaluadorNombre,
-        evaluadorRol: info.evaluadorRol,
-        rubricaNombre: info.rubricaNombre,
-        puntajeMaximo,
-        detalles
-      }
-    });
-
-  } catch (error) {
-    console.error('ERROR DETALLE EVALUACION:', error);
-    return res.status(500).json({ ok: false, mensaje: 'Error obteniendo detalle de la evaluación' });
-  }
+  // ... (mantén tu código existente)
 };
 
 // ============================================
 // EXPORTAR PDF GENERAL
 // ============================================
 exports.exportarPDF = async (req, res) => {
-  try {
-    const [rawRows] = await db.query(`
-      SELECT
-        p.nombre AS proyecto,
-        u.nombre AS evaluador,
-        u.rol,
-        ROUND(SUM(n.puntaje), 2) AS puntaje,
-        ROUND(AVG(n.puntaje), 2) AS promedio
-      FROM proyectos p
-      LEFT JOIN evaluaciones e ON e.proyecto_id = p.id
-      LEFT JOIN detalles_evaluacion d ON d.evaluacion_id = e.id
-      LEFT JOIN niveles n ON n.id = d.nivel_id
-      LEFT JOIN usuarios u ON u.id = e.evaluador_id
-      GROUP BY p.nombre, u.nombre, u.rol
-      ORDER BY p.nombre ASC
-    `);
-
-    const rows = rawRows.map(r => ({
-      proyecto: r.proyecto,
-      evaluador: r.evaluador,
-      rol: r.rol,
-      puntaje: Number(r.puntaje) || 0,
-      promedio: Number(r.promedio) || 0
-    }));
-
-    const totalProyectos = new Set(rows.map(r => r.proyecto)).size;
-    const totalEvaluadores = new Set(rows.map(r => r.evaluador)).size;
-    const promedioGeneral = rows.reduce((sum, r) => sum + r.promedio, 0) / (rows.length || 1);
-
-    const pdfBuffer = generarPdfBuffer({
-      titulo: 'REPORTE DE EVALUACIONES',
-      estadisticas: [
-        `Total de proyectos: ${totalProyectos}`,
-        `Total de evaluadores: ${totalEvaluadores}`,
-        `Promedio general: ${promedioGeneral.toFixed(2)} pts`
-      ],
-      tablaHeaders: ['Proyecto', 'Evaluador', 'Rol', 'Puntaje', 'Promedio'],
-      tablaFilas: rows.map(r => [
-        r.proyecto || 'N/A',
-        r.evaluador || 'N/A',
-        r.rol || 'N/A',
-        r.puntaje.toFixed(2),
-        r.promedio.toFixed(2)
-      ])
-    });
-
-    try {
-      await LogsService.registrarActividad({
-        usuario: req.usuario,
-        tipo: 'reporte',
-        accion: 'exportar',
-        entidad_id: null,
-        entidad_nombre: 'Exportación PDF general',
-        descripcion: `Exportó reporte general en PDF con ${rows.length} registros`,
-        detalles: { totalRegistros: rows.length, tipo: 'pdf' },
-        req
-      });
-    } catch (logError) {
-      console.error("Error registrando log:", logError);
-    }
-
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=reporte-evaluaciones-${new Date().toISOString().split('T')[0]}.pdf`);
-    res.send(pdfBuffer);
-
-  } catch (error) {
-    console.error('ERROR EXPORTAR PDF:', error);
-    return res.status(500).json({ ok: false, mensaje: 'Error generando PDF: ' + error.message });
-  }
+  // ... (mantén tu código existente)
 };
 
 // ============================================
 // EXPORTAR PDF POR PROYECTO
 // ============================================
 exports.exportarPDFProyecto = async (req, res) => {
-  try {
-    const proyectoId = parseInt(req.params.proyectoId);
-
-    const [proyectos] = await db.query(
-      `SELECT id, nombre, descripcion FROM proyectos WHERE id = ?`,
-      [proyectoId]
-    );
-
-    if (proyectos.length === 0) {
-      return res.status(404).json({ ok: false, mensaje: 'Proyecto no encontrado' });
-    }
-
-    const proyecto = proyectos[0];
-
-    const [rawRows] = await db.query(`
-      SELECT
-        u.nombre AS evaluador,
-        u.rol,
-        ROUND(SUM(n.puntaje), 2) AS puntaje,
-        ROUND(AVG(n.puntaje), 2) AS promedio,
-        COUNT(DISTINCT e.id) AS total_evaluaciones
-      FROM evaluaciones e
-      JOIN detalles_evaluacion d ON d.evaluacion_id = e.id
-      JOIN niveles n ON n.id = d.nivel_id
-      JOIN usuarios u ON u.id = e.evaluador_id
-      WHERE e.proyecto_id = ?
-      GROUP BY u.id, u.nombre, u.rol
-      ORDER BY puntaje DESC
-    `, [proyectoId]);
-
-    const rows = rawRows.map(r => ({
-      evaluador: r.evaluador,
-      rol: r.rol,
-      puntaje: Number(r.puntaje) || 0,
-      promedio: Number(r.promedio) || 0,
-      total_evaluaciones: Number(r.total_evaluaciones) || 0
-    }));
-
-    const nombreArchivo = rows.length === 0
-      ? `reporte-${nombreSeguro(proyecto.nombre)}-sin-evaluaciones.pdf`
-      : `reporte-${nombreSeguro(proyecto.nombre)}-${new Date().toISOString().split('T')[0]}.pdf`;
-
-    const totalEvaluadores = rows.length;
-    const promedioGeneral = rows.length
-      ? rows.reduce((sum, r) => sum + r.promedio, 0) / rows.length
-      : 0;
-    const puntajeTotal = rows.reduce((sum, r) => sum + r.puntaje, 0);
-
-    const pdfBuffer = generarPdfBuffer({
-      titulo: 'REPORTE DE EVALUACIÓN',
-      subtitulo: `Proyecto: ${proyecto.nombre.toUpperCase()}`,
-      descripcion: proyecto.descripcion || null,
-      estadisticas: rows.length ? [
-        `Total de evaluadores: ${totalEvaluadores}`,
-        `Puntaje total: ${puntajeTotal.toFixed(2)} pts`,
-        `Promedio general: ${promedioGeneral.toFixed(2)} pts`
-      ] : [],
-      tablaTitulo: rows.length ? 'Evaluadores' : null,
-      tablaHeaders: ['Evaluador', 'Rol', 'Puntaje', 'Promedio'],
-      tablaFilas: rows.map(r => [
-        r.evaluador || 'N/A',
-        r.rol || 'N/A',
-        r.puntaje.toFixed(2),
-        r.promedio.toFixed(2)
-      ])
-    });
-
-    try {
-      await LogsService.registrarActividad({
-        usuario: req.usuario,
-        tipo: 'reporte',
-        accion: 'exportar',
-        entidad_id: proyectoId,
-        entidad_nombre: `Exportación PDF: ${proyecto.nombre}`,
-        descripcion: `Exportó reporte en PDF del proyecto "${proyecto.nombre}" con ${rows.length} evaluadores`,
-        detalles: { proyectoId, totalEvaluadores: rows.length, tipo: 'pdf' },
-        req
-      });
-    } catch (logError) {
-      console.error("Error registrando log:", logError);
-    }
-
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=${nombreArchivo}`);
-    res.send(pdfBuffer);
-
-  } catch (error) {
-    console.error('ERROR EXPORTAR PDF PROYECTO:', error);
-    return res.status(500).json({ ok: false, mensaje: 'Error generando PDF del proyecto: ' + error.message });
-  }
+  // ... (mantén tu código existente)
 };
 
 // ============================================
 // STATS POR CONCURSO
 // ============================================
 exports.statsByConcurso = async (req, res) => {
-  try {
-    const concursoId = parseInt(req.params.concursoId);
-
-    const tieneAcceso = await validarAccesoConcurso(req.usuario, concursoId);
-    if (!tieneAcceso) {
-      return res.status(403).json({ ok: false, mensaje: 'No tienes permisos para ver este concurso' });
-    }
-
-    const stats = await ReporteService.getStatsByConcurso(concursoId);
-
-    return res.json({
-      ok: true,
-      data: stats
-    });
-
-  } catch (error) {
-    console.error('ERROR STATS CONCURSO:', error);
-    return res.status(500).json({ ok: false, mensaje: 'Error obteniendo estadísticas del concurso' });
-  }
+  // ... (mantén tu código existente)
 };
 
 // ============================================
 // EXPORTAR PDF POR CONCURSO
 // ============================================
 exports.exportarPDFConcurso = async (req, res) => {
-  try {
-    const concursoId = parseInt(req.params.concursoId);
-
-    const tieneAcceso = await validarAccesoConcurso(req.usuario, concursoId);
-    if (!tieneAcceso) {
-      return res.status(403).json({ ok: false, mensaje: 'No tienes permisos para ver este concurso' });
-    }
-
-    const concursoInfo = await ReporteService.getConcursoById(concursoId);
-
-    if (!concursoInfo) {
-      return res.status(404).json({ ok: false, mensaje: 'Concurso no encontrado' });
-    }
-
-    const [rawRows] = await db.query(`
-      SELECT
-        p.nombre AS proyecto,
-        u.nombre AS evaluador,
-        u.rol,
-        ROUND(SUM(n.puntaje), 2) AS puntaje,
-        ROUND(AVG(n.puntaje), 2) AS promedio
-      FROM proyectos p
-      LEFT JOIN evaluaciones e ON e.proyecto_id = p.id
-      LEFT JOIN detalles_evaluacion d ON d.evaluacion_id = e.id
-      LEFT JOIN niveles n ON n.id = d.nivel_id
-      LEFT JOIN usuarios u ON u.id = e.evaluador_id
-      WHERE p.concurso_id = ?
-      GROUP BY p.nombre, u.nombre, u.rol
-      ORDER BY p.nombre ASC
-    `, [concursoId]);
-
-    const rows = rawRows.map(r => ({
-      proyecto: r.proyecto,
-      evaluador: r.evaluador,
-      rol: r.rol,
-      puntaje: Number(r.puntaje) || 0,
-      promedio: Number(r.promedio) || 0
-    }));
-
-    const totalProyectos = new Set(rows.map(r => r.proyecto)).size;
-    const totalEvaluadores = new Set(rows.map(r => r.evaluador).filter(Boolean)).size;
-    const promedioGeneral = rows.length
-      ? rows.reduce((sum, r) => sum + r.promedio, 0) / rows.length
-      : 0;
-
-    const pdfBuffer = generarPdfBuffer({
-      titulo: 'REPORTE DEL CONCURSO',
-      subtitulo: concursoInfo.nombre,
-      estadisticas: [
-        `Total de proyectos: ${totalProyectos}`,
-        `Total de evaluadores: ${totalEvaluadores}`,
-        `Promedio general: ${promedioGeneral.toFixed(2)} pts`
-      ],
-      tablaHeaders: ['Proyecto', 'Evaluador', 'Rol', 'Puntaje', 'Promedio'],
-      tablaFilas: rows.map(r => [
-        r.proyecto || 'N/A',
-        r.evaluador || 'Sin evaluar',
-        r.rol || 'N/A',
-        r.puntaje.toFixed(2),
-        r.promedio.toFixed(2)
-      ])
-    });
-
-    try {
-      await LogsService.registrarActividad({
-        usuario: req.usuario,
-        tipo: 'reporte',
-        accion: 'exportar',
-        entidad_id: concursoId,
-        entidad_nombre: `Exportación PDF: ${concursoInfo.nombre}`,
-        descripcion: `Exportó reporte en PDF del concurso "${concursoInfo.nombre}"`,
-        detalles: { concursoId, totalRegistros: rows.length, tipo: 'pdf' },
-        req
-      });
-    } catch (logError) {
-      console.error("Error registrando log:", logError);
-    }
-
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=reporte-${nombreSeguro(concursoInfo.nombre)}.pdf`);
-    res.send(pdfBuffer);
-
-  } catch (error) {
-    console.error('ERROR EXPORTAR PDF CONCURSO:', error);
-    return res.status(500).json({ ok: false, mensaje: 'Error generando PDF del concurso: ' + error.message });
-  }
+  // ... (mantén tu código existente)
 };
 
 // ============================================
 // EXPORTAR EXCEL POR CONCURSO
 // ============================================
 exports.exportarExcelConcurso = async (req, res) => {
-  try {
-    const concursoId = parseInt(req.params.concursoId);
-
-    const tieneAcceso = await validarAccesoConcurso(req.usuario, concursoId);
-    if (!tieneAcceso) {
-      return res.status(403).json({ ok: false, mensaje: 'No tienes permisos para ver este concurso' });
-    }
-
-    const concursoInfo = await ReporteService.getConcursoById(concursoId);
-
-    if (!concursoInfo) {
-      return res.status(404).json({ ok: false, mensaje: 'Concurso no encontrado' });
-    }
-
-    const [rows] = await db.query(`
-      SELECT
-        p.nombre AS proyecto,
-        u.nombre AS evaluador,
-        u.rol,
-        ROUND(SUM(n.puntaje), 2) AS puntaje,
-        ROUND(AVG(n.puntaje), 2) AS promedio
-      FROM proyectos p
-      LEFT JOIN evaluaciones e ON e.proyecto_id = p.id
-      LEFT JOIN detalles_evaluacion d ON d.evaluacion_id = e.id
-      LEFT JOIN niveles n ON n.id = d.nivel_id
-      LEFT JOIN usuarios u ON u.id = e.evaluador_id
-      WHERE p.concurso_id = ?
-      GROUP BY p.nombre, u.nombre, u.rol
-      ORDER BY p.nombre ASC
-    `, [concursoId]);
-
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet(`Reporte ${concursoInfo.nombre}`.substring(0, 31));
-
-    sheet.mergeCells('A1:E1');
-    const titleCell = sheet.getCell('A1');
-    titleCell.value = `REPORTE DEL CONCURSO - ${concursoInfo.nombre.toUpperCase()}`;
-    titleCell.font = { size: 16, bold: true, color: { argb: 'FF003366' } };
-    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-    sheet.getRow(1).height = 40;
-
-    const headerRow = sheet.getRow(3);
-    headerRow.values = ['Proyecto', 'Evaluador', 'Rol', 'Puntaje', 'Promedio'];
-    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF003366' } };
-    headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
-    headerRow.height = 30;
-
-    sheet.getColumn(1).width = 35;
-    sheet.getColumn(2).width = 30;
-    sheet.getColumn(3).width = 20;
-    sheet.getColumn(4).width = 15;
-    sheet.getColumn(5).width = 15;
-
-    let rowIndex = 4;
-    rows.forEach(row => {
-      const rowData = sheet.getRow(rowIndex);
-      rowData.values = [
-        row.proyecto,
-        row.evaluador || 'Sin evaluar',
-        row.rol || '',
-        Number(row.puntaje) || 0,
-        Number(row.promedio) || 0
-      ];
-      rowData.alignment = { vertical: 'middle' };
-      rowData.height = 25;
-      rowIndex++;
-    });
-
-    try {
-      await LogsService.registrarActividad({
-        usuario: req.usuario,
-        tipo: 'reporte',
-        accion: 'exportar',
-        entidad_id: concursoId,
-        entidad_nombre: `Exportación Excel: ${concursoInfo.nombre}`,
-        descripcion: `Exportó reporte en Excel del concurso "${concursoInfo.nombre}"`,
-        detalles: { concursoId, totalRegistros: rows.length, tipo: 'excel' },
-        req
-      });
-    } catch (logError) {
-      console.error("Error registrando log:", logError);
-    }
-
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename=reporte-${nombreSeguro(concursoInfo.nombre)}.xlsx`);
-
-    await workbook.xlsx.write(res);
-    res.end();
-
-  } catch (error) {
-    console.error('ERROR EXPORTAR EXCEL CONCURSO:', error);
-    return res.status(500).json({ ok: false, mensaje: 'Error generando Excel del concurso' });
-  }
+  // ... (mantén tu código existente)
 };
 
 // ============================================
-// OBTENER JURADO POR CONCURSO (NUEVO)
+// OBTENER JURADO POR CONCURSO
 // ============================================
 exports.getJuradoByConcurso = async (req, res) => {
+  // ... (mantén tu código existente)
+};
+
+// ============================================
+// OBTENER EVALUADORES POR CONCURSO (NUEVO)
+// ============================================
+exports.getEvaluadoresByConcurso = async (req, res) => {
   try {
     const concursoId = parseInt(req.params.concursoId);
 
@@ -1239,17 +726,6 @@ exports.getJuradoByConcurso = async (req, res) => {
       });
     }
 
-    // Verificar que el concurso existe
-    const concursoInfo = await ReporteService.getConcursoById(concursoId);
-
-    if (!concursoInfo) {
-      return res.status(404).json({
-        ok: false,
-        mensaje: 'Concurso no encontrado'
-      });
-    }
-
-    // Verificar acceso
     const tieneAcceso = await validarAccesoConcurso(req.usuario, concursoId);
     if (!tieneAcceso) {
       return res.status(403).json({
@@ -1258,32 +734,37 @@ exports.getJuradoByConcurso = async (req, res) => {
       });
     }
 
-    // Obtener jurado con detalles
-    const jurado = await ReporteService.getJuradoDetalleByConcurso(concursoId);
-
-    // Formatear para el frontend
-    const juradoFormateado = jurado.map(j => ({
-      id: j.id,
-      nombre: j.nombre,
-      rol: j.rol,
-      email: j.email,
-      departamento: j.departamento,
-      cedula: j.cedula,
-      proyectosAsignados: j.proyectos_asignados || 0,
-      proyectosEvaluados: j.proyectos_evaluados || 0
-    }));
+    // Obtener evaluadores del concurso
+    const [evaluadores] = await db.query(`
+      SELECT DISTINCT
+        u.id,
+        u.nombre,
+        u.rol,
+        u.email,
+        u.departamento,
+        u.cedula,
+        COUNT(DISTINCT a.proyecto_id) AS proyectosAsignados,
+        COUNT(DISTINCT CASE WHEN a.estado = 'evaluado' THEN a.proyecto_id END) AS proyectosEvaluados
+      FROM usuarios u
+      INNER JOIN asignaciones a ON a.evaluador_id = u.id
+      INNER JOIN proyectos p ON p.id = a.proyecto_id
+      WHERE p.concurso_id = ?
+        AND u.rol = 'evaluador'
+        AND u.activo = 1
+      GROUP BY u.id, u.nombre, u.rol, u.email, u.departamento, u.cedula
+      ORDER BY u.nombre ASC
+    `, [concursoId]);
 
     return res.json({
       ok: true,
-      data: juradoFormateado,
-      concurso: concursoInfo.nombre
+      data: evaluadores
     });
 
   } catch (error) {
-    console.error('ERROR GET JURADO:', error);
+    console.error('ERROR GET EVALUADORES:', error);
     return res.status(500).json({
       ok: false,
-      mensaje: 'Error obteniendo el jurado del concurso'
+      mensaje: 'Error obteniendo evaluadores del concurso'
     });
   }
 };

@@ -3,7 +3,6 @@ const router = express.Router();
 const reporteController = require('../controller/reporteController');
 const authMiddleware = require('../middleware/authMiddleware');
 const roleMiddleware = require('../middleware/roleMiddleware');
-
 router.get('/stats', authMiddleware, roleMiddleware('admin'), reporteController.stats);
 router.get('/ranking', authMiddleware, roleMiddleware('admin'), reporteController.ranking);
 router.get('/proyectos', authMiddleware, roleMiddleware('admin'), reporteController.proyectos);
@@ -13,9 +12,9 @@ router.get('/exportar', authMiddleware, roleMiddleware('admin'), reporteControll
 router.get('/exportar/proyecto/:proyectoId', authMiddleware, roleMiddleware('admin'), reporteController.exportarProyecto);
 router.get('/exportar-pdf', authMiddleware, roleMiddleware('admin'), reporteController.exportarPDF);
 router.get('/exportar-pdf/proyecto/:proyectoId', authMiddleware, roleMiddleware('admin'), reporteController.exportarPDFProyecto);
-
 router.get('/stats/concurso/:concursoId', authMiddleware, roleMiddleware(['admin', 'coordinador']), reporteController.statsByConcurso);
 router.get('/exportar-pdf/concurso/:concursoId', authMiddleware, roleMiddleware(['admin', 'coordinador']), reporteController.exportarPDFConcurso);
 router.get('/exportar-excel/concurso/:concursoId', authMiddleware, roleMiddleware(['admin', 'coordinador']), reporteController.exportarExcelConcurso);
+router.get('/evaluadores/concurso/:concursoId', authMiddleware, roleMiddleware(['admin', 'coordinador']), reporteController.getEvaluadoresByConcurso);
 
 module.exports = router;
