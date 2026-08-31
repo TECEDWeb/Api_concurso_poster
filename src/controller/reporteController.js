@@ -332,7 +332,8 @@ exports.proyectos = async (req, res) => {
         p.nombre AS proyecto,
         p.area,
         p.nivel,
-        p.concurso_id AS concursoId
+        p.concurso_id AS concursoId,
+        p.tipo_participacion
       FROM proyectos p
       ORDER BY p.nombre ASC
     `);
@@ -386,6 +387,7 @@ exports.proyectos = async (req, res) => {
         area: row.area || null,
         nivel: row.nivel || null,
         concursoId: row.concursoId || null,
+        tipo_participacion: row.tipo_participacion || 'competencia',
         puntajeMaximo: puntajeMaximoPorConcurso[row.concursoId] || 100,
         evaluadores: [],
         participantes: participantesPorProyecto[row.id] || [],

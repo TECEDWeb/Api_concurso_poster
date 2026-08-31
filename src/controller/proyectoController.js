@@ -29,23 +29,31 @@ const proyectoController = {
     }
   },
 
-  // ✅ ACTUALIZADO: participantes opcionales, agregado codigoProyecto
   async create(req, res) {
     try {
-      const { 
-        nombre, 
-        descripcion, 
-        concursoId, 
-        nivel, 
-        area, 
-        activo, 
+      const {
+        nombre,
+        descripcion,
+        concursoId,
+        nivel,
+        area,
+        activo,
         codigoProyecto,
-        participantes = [], 
-        tutores = [] 
+        tipo_participacion = 'competencia',  // ✅ NUEVO
+        participantes = [],
+        tutores = []
       } = req.body;
 
       if (!nombre || nombre.trim() === '') {
         return res.status(400).json({ ok: false, mensaje: 'El nombre del proyecto es obligatorio' });
+      }
+
+      // ✅ Validar tipo_participacion
+      if (!['competencia', 'exhibicion'].includes(tipo_participacion)) {
+        return res.status(400).json({
+          ok: false,
+          mensaje: 'Tipo de participación inválido. Debe ser "competencia" o "exhibicion"'
+        });
       }
 
       const tutoresValidos = Array.isArray(tutores) ? tutores.filter(t => t && t.trim()) : [];
@@ -61,6 +69,7 @@ const proyectoController = {
         area: area || null,
         activo: activo !== undefined ? activo : true,
         codigo_proyecto: codigoProyecto || null,
+        tipo_participacion: tipo_participacion,  // ✅ NUEVO
         participantes: participantes || [],
         tutores: tutores || []
       });
@@ -73,12 +82,13 @@ const proyectoController = {
           accion: 'crear',
           entidad_id: proyecto?.id || null,
           entidad_nombre: nombre.trim(),
-          descripcion: `Se creó el proyecto "${nombre.trim()}" en el área "${area || 'Sin área'}" con nivel "${nivel || 'Sin nivel'}"`,
-          detalles: { 
-            concursoId, 
-            nivel, 
-            area, 
+          descripcion: `Se creó el proyecto "${nombre.trim()}" en el área "${area || 'Sin área'}" con nivel "${nivel || 'Sin nivel'}" (${tipo_participacion === 'competencia' ? 'Participa en concurso' : 'Solo exhibición'})`,
+          detalles: {
+            concursoId,
+            nivel,
+            area,
             codigoProyecto,
+            tipo_participacion,
             totalParticipantes: participantes.length,
             totalTutores: tutoresValidos.length
           },
@@ -86,7 +96,6 @@ const proyectoController = {
         });
       } catch (logError) {
         console.error("Error registrando log:", logError);
-        // No interrumpimos el flujo si falla el log
       }
 
       return res.status(201).json({ ok: true, mensaje: 'Proyecto creado correctamente', data: proyecto });
@@ -97,24 +106,35 @@ const proyectoController = {
     }
   },
 
-  // ✅ ACTUALIZADO
   async update(req, res) {
     try {
       const id = parseInt(req.params.id);
-      const { 
-        nombre, 
-        descripcion, 
-        concursoId, 
-        nivel, 
-        area, 
-        activo, 
+      const {
+        nombre,
+        descripcion,
+        concursoId,
+        nivel,
+        area,
+        activo,
         codigoProyecto,
-        participantes, 
-        tutores 
+        tipo_participacion,  // ✅ NUEVO
+        participantes,
+        tutores
       } = req.body;
+      console.log('📥 UPDATE PROYECTO ID:', id);
+      console.log('📥 Datos recibidos:', req.body);
+      console.log('📥 tipo_participacion recibido:', tipo_participacion);
 
       if (!nombre || nombre.trim() === '') {
         return res.status(400).json({ ok: false, mensaje: 'El nombre del proyecto es obligatorio' });
+      }
+
+      // ✅ Validar tipo_participacion si viene
+      if (tipo_participacion && !['competencia', 'exhibicion'].includes(tipo_participacion)) {
+        return res.status(400).json({
+          ok: false,
+          mensaje: 'Tipo de participación inválido. Debe ser "competencia" o "exhibicion"'
+        });
       }
 
       const existente = await ProyectoService.getById(id);
@@ -134,6 +154,7 @@ const proyectoController = {
         area: area !== undefined ? area : existente.area,
         activo: activo !== undefined ? activo : existente.activo,
         codigo_proyecto: codigoProyecto || existente.codigo_proyecto,
+        tipo_participacion: tipo_participacion || existente.tipo_participacion,  // ✅ NUEVO
         participantes: participantes !== undefined ? participantes : existente.participantes?.map(p => p.nombre) || [],
         tutores: tutores !== undefined ? tutores : existente.tutores?.map(t => t.nombre) || []
       });
@@ -147,6 +168,9 @@ const proyectoController = {
         if (area !== existente.area) cambios.push(`área: "${existente.area || 'Sin área'}" → "${area || 'Sin área'}"`);
         if (nivel !== existente.nivel) cambios.push(`nivel: "${existente.nivel || 'Sin nivel'}" → "${nivel || 'Sin nivel'}"`);
         if (activo !== existente.activo) cambios.push(`estado: ${existente.activo ? 'Activo' : 'Inactivo'} → ${activo ? 'Activo' : 'Inactivo'}`);
+        if (tipo_participacion && tipo_participacion !== existente.tipo_participacion) {
+          cambios.push(`tipo: "${existente.tipo_participacion === 'competencia' ? 'Participa' : 'Exhibición'}" → "${tipo_participacion === 'competencia' ? 'Participa' : 'Exhibición'}"`);
+        }
 
         await LogsService.registrarActividad({
           usuario: req.usuario,
@@ -155,27 +179,28 @@ const proyectoController = {
           entidad_id: id,
           entidad_nombre: nombre.trim(),
           descripcion: `Se actualizó el proyecto "${nombre.trim()}"${cambios.length > 0 ? ': ' + cambios.join(', ') : ''}`,
-          detalles: { 
-            cambios: { 
-              antes: { 
-                nombre: existente.nombre, 
-                area: existente.area, 
+          detalles: {
+            cambios: {
+              antes: {
+                nombre: existente.nombre,
+                area: existente.area,
                 nivel: existente.nivel,
-                activo: existente.activo 
-              }, 
-              despues: { 
-                nombre: nombre.trim(), 
-                area: area || null, 
+                activo: existente.activo,
+                tipo_participacion: existente.tipo_participacion
+              },
+              despues: {
+                nombre: nombre.trim(),
+                area: area || null,
                 nivel: nivel || null,
-                activo: activo !== undefined ? activo : true
-              } 
-            } 
+                activo: activo !== undefined ? activo : true,
+                tipo_participacion: tipo_participacion || existente.tipo_participacion
+              }
+            }
           },
           req
         });
       } catch (logError) {
         console.error("Error registrando log:", logError);
-        // No interrumpimos el flujo si falla el log
       }
 
       return res.json({ ok: true, mensaje: 'Proyecto actualizado correctamente', data: proyectoActualizado });
@@ -195,12 +220,10 @@ const proyectoController = {
         return res.status(404).json({ ok: false, mensaje: 'Proyecto no encontrado' });
       }
 
-      // Guardar nombre para el log
       const nombreProyecto = existente.nombre;
 
       await ProyectoService.delete(id);
 
-      // ✅ LOG: Proyecto eliminado
       try {
         await LogsService.registrarActividad({
           usuario: req.usuario,
@@ -214,7 +237,6 @@ const proyectoController = {
         });
       } catch (logError) {
         console.error("Error registrando log:", logError);
-        // No interrumpimos el flujo si falla el log
       }
 
       return res.json({ ok: true, mensaje: 'Proyecto eliminado correctamente' });

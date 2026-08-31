@@ -1,3 +1,7 @@
+// ============================================
+// ProyectoService.js - MODIFICADO
+// ============================================
+
 const db = require('../config/db');
 
 const MAX_TUTORES = 4;
@@ -9,6 +13,7 @@ const ProyectoService = {
       SELECT 
         p.id, p.concurso_id, p.nombre, p.descripcion,
         p.nivel, p.area, p.activo, p.created_at, p.codigo_proyecto,
+        p.tipo_participacion,  -- ✅ NUEVO
         c.nombre AS concurso_nombre
       FROM proyectos p
       LEFT JOIN concursos c ON p.concurso_id = c.id
@@ -39,7 +44,9 @@ const ProyectoService = {
   async getById(id) {
     const [rows] = await db.query(`
       SELECT 
-        p.*, c.nombre AS concurso_nombre
+        p.*, 
+        c.nombre AS concurso_nombre,
+        p.tipo_participacion  -- ✅ NUEVO
       FROM proyectos p
       LEFT JOIN concursos c ON p.concurso_id = c.id
       WHERE p.id = ?
@@ -62,30 +69,33 @@ const ProyectoService = {
     return { ...proyecto, participantes, tutores };
   },
 
-
   async create(data) {
-    const { 
-      concurso_id, 
-      nombre, 
-      descripcion, 
-      nivel, 
-      area, 
-      activo, 
-      codigo_proyecto,  // NUEVO
-      participantes = [], 
-      tutores = [] 
+    const {
+      concurso_id,
+      nombre,
+      descripcion,
+      nivel,
+      area,
+      activo,
+      codigo_proyecto,
+      tipo_participacion = 'competencia',  // ✅ NUEVO
+      participantes = [],
+      tutores = []
     } = data;
+
+    // Validar tipo_participacion
+    if (!['competencia', 'exhibicion'].includes(tipo_participacion)) {
+      throw new Error('Tipo de participación inválido. Debe ser "competencia" o "exhibicion"');
+    }
 
     const listaParticipantes = (participantes || []).filter(n => n && n.trim());
     const listaTutores = (tutores || []).filter(n => n && n.trim()).slice(0, MAX_TUTORES);
-
 
     const connection = await db.getConnection();
 
     try {
       await connection.beginTransaction();
 
-      // Generar código automático si no se proporciona
       let codigo = codigo_proyecto;
       if (!codigo) {
         const [maxId] = await connection.query(`SELECT MAX(id) as maxId FROM proyectos`);
@@ -93,10 +103,11 @@ const ProyectoService = {
         codigo = `PROJ-${String(nextId).padStart(4, '0')}`;
       }
 
+      // ✅ Incluir tipo_participacion en el INSERT
       const [result] = await connection.query(
-        `INSERT INTO proyectos (concurso_id, nombre, descripcion, nivel, area, activo, codigo_proyecto)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [concurso_id || null, nombre.trim(), descripcion || null, nivel || null, area || null, activo !== undefined ? activo : 1, codigo]
+        `INSERT INTO proyectos (concurso_id, nombre, descripcion, nivel, area, activo, codigo_proyecto, tipo_participacion)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [concurso_id || null, nombre.trim(), descripcion || null, nivel || null, area || null, activo !== undefined ? activo : 1, codigo, tipo_participacion]
       );
 
       const proyectoId = result.insertId;
@@ -108,7 +119,6 @@ const ProyectoService = {
         );
       }
 
-      // Insertar tutores SOLO si hay
       for (let i = 0; i < listaTutores.length; i++) {
         await connection.query(
           `INSERT INTO tutores (proyecto_id, nombre, encargado) VALUES (?, ?, ?)`,
@@ -130,17 +140,23 @@ const ProyectoService = {
   },
 
   async update(id, data) {
-    const { 
-      concurso_id, 
-      nombre, 
-      descripcion, 
-      nivel, 
-      area, 
-      activo, 
+    const {
+      concurso_id,
+      nombre,
+      descripcion,
+      nivel,
+      area,
+      activo,
       codigo_proyecto,
-      participantes, 
-      tutores 
+      tipo_participacion,  // ✅ NUEVO
+      participantes,
+      tutores
     } = data;
+
+    // Validar tipo_participacion si viene
+    if (tipo_participacion && !['competencia', 'exhibicion'].includes(tipo_participacion)) {
+      throw new Error('Tipo de participación inválido. Debe ser "competencia" o "exhibicion"');
+    }
 
     const listaParticipantes = (participantes || []).filter(n => n && n.trim());
     const listaTutores = (tutores || []).filter(n => n && n.trim()).slice(0, MAX_TUTORES);
@@ -150,14 +166,21 @@ const ProyectoService = {
     try {
       await connection.beginTransaction();
 
-      await connection.query(
-        `UPDATE proyectos
-         SET concurso_id = ?, nombre = ?, descripcion = ?, nivel = ?, area = ?, activo = ?, codigo_proyecto = ?
-         WHERE id = ?`,
-        [concurso_id || null, nombre || '', descripcion || null, nivel || null, area || null, activo !== undefined ? activo : 1, codigo_proyecto || null, id]
+      // ✅ Obtener el proyecto actual para saber su tipo_participacion si no viene
+      const [proyectoActual] = await connection.query(
+        `SELECT tipo_participacion FROM proyectos WHERE id = ?`,
+        [id]
       );
 
-      // Reemplazar participantes SOLO si se proporcionan
+      const tipoFinal = tipo_participacion || (proyectoActual.length > 0 ? proyectoActual[0].tipo_participacion : 'competencia');
+
+      await connection.query(
+        `UPDATE proyectos
+         SET concurso_id = ?, nombre = ?, descripcion = ?, nivel = ?, area = ?, activo = ?, codigo_proyecto = ?, tipo_participacion = ?
+         WHERE id = ?`,
+        [concurso_id || null, nombre || '', descripcion || null, nivel || null, area || null, activo !== undefined ? activo : 1, codigo_proyecto || null, tipoFinal, id]
+      );
+
       if (participantes !== undefined) {
         await connection.query(`DELETE FROM participantes WHERE proyecto_id = ?`, [id]);
         for (const nombreParticipante of listaParticipantes) {
@@ -168,7 +191,6 @@ const ProyectoService = {
         }
       }
 
-      // Reemplazar tutores SOLO si se proporcionan
       if (tutores !== undefined) {
         await connection.query(`DELETE FROM tutores WHERE proyecto_id = ?`, [id]);
         for (let i = 0; i < listaTutores.length; i++) {
@@ -190,7 +212,7 @@ const ProyectoService = {
       connection.release();
     }
   },
-  
+
   async delete(id) {
     const connection = await db.getConnection();
 
