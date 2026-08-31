@@ -709,7 +709,38 @@ exports.exportarExcelConcurso = async (req, res) => {
 // OBTENER JURADO POR CONCURSO
 // ============================================
 exports.getJuradoByConcurso = async (req, res) => {
-  // ... (mantén tu código existente)
+  try {
+    const concursoId = parseInt(req.params.concursoId);
+
+    if (!concursoId) {
+      return res.status(400).json({
+        ok: false,
+        mensaje: 'El ID del concurso es requerido'
+      });
+    }
+
+    const tieneAcceso = await validarAccesoConcurso(req.usuario, concursoId);
+    if (!tieneAcceso) {
+      return res.status(403).json({
+        ok: false,
+        mensaje: 'No tienes permisos para ver este concurso'
+      });
+    }
+
+    const jurado = await ReporteService.getJuradoByConcurso(concursoId);
+
+    return res.json({
+      ok: true,
+      data: jurado
+    });
+
+  } catch (error) {
+    console.error('ERROR GET JURADO:', error);
+    return res.status(500).json({
+      ok: false,
+      mensaje: 'Error obteniendo jurado del concurso'
+    });
+  }
 };
 
 // ============================================
